@@ -214,25 +214,7 @@
         
         <div id="side-panel">
             <h2 style="text-align: center; color: #DEB887; font-size: 18px; letter-spacing: 2px;">📜 居家日记</h2>
-            
-            <div class="status-container">
-                <div class="char-card">
-                    <div class="char-icon" style="background: #ff7f50;"></div>
-                    <div class="char-info">
-                        <div class="char-name">宝宝 <span>LV.MAX</span></div>
-                        <div class="char-status">当前状态：惬意伸懒腰中...</div>
-                        <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 100%; background: #ff8c00;"></div></div>
-                    </div>
-                </div>
-                <div class="char-card">
-                    <div class="char-icon" style="background: #3498db;"></div>
-                    <div class="char-info">
-                        <div class="char-name">Galen <span>LV.99</span></div>
-                        <div class="char-status">当前状态：宠溺观察中...</div>
-                        <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 95%; background: #3498db;"></div></div>
-                    </div>
-                </div>
-            </div>
+            <div id="mcp-status" style="text-align: center; color: #aaa; font-size: 12px; margin-bottom: 15px;">🟢 当前连接 MCP 数: <span id="mcp-count" style="color: #ff8c00; font-weight: bold;">0</span></div>
 
             <div id="event-log"></div>
             <p style="font-size: 12px; color: #95a5a6; margin-top: 10px;">提示：请在聊天软件中让 Galen 执行动作，这里会同步更新。</p>
@@ -314,6 +296,12 @@
                 avatar.style.top = (basePos.y + offset) + "%";
                 avatar.style.background = name === '小橘' ? '#ff8c00' : '#3498db';
             });
+
+            // --- 新增：更新当前连接的 MCP 数量 ---
+            const mcpCountSpan = document.getElementById('mcp-count');
+            if (mcpCountSpan) {
+                mcpCountSpan.innerText = Object.keys(players).length;
+            }
         }
 
         function updateLogs(logs) {
