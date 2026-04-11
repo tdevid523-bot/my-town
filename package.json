@@ -8,6 +8,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "latest",
     "express": "latest",
-    "node-fetch": "latest"
+    "node-fetch": "latest",
+    "cors": "latest"
   }
 }
