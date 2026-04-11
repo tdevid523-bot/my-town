@@ -107,16 +107,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     town = await loadTown(); // 动作前先刷新数据
 
+    // --- 核心修复：统一在最上方提取并处理玩家昵称 ---
+    let pName = args?.playerName;
+    if (name === "observe_environment" && !pName) {
+        pName = "未知旅客"; // 观察环境允许匿名，给个默认名
+    }
+
     // --- 自动清理逻辑：检查一小时没动静的角色 ---
     const now = Date.now();
     let changed = false;
-    for (const [name, data] of Object.entries(town.players)) {
+    // 修复冲突：将循环变量从 name 改为 playerName，避免和外层的工具 name 冲突
+    for (const [playerName, data] of Object.entries(town.players)) {
         if (data.lastActive && (now - data.lastActive > 3600000)) { // 3600000毫秒 = 1小时
-            delete town.players[name];
-            town.eventLog.push(`⏰ ${name} 很久没发指令，已自动退出小镇。`);
+            delete town.players[playerName];
+            town.eventLog.push(`⏰ ${playerName} 很久没发指令，已自动退出小镇。`);
             changed = true;
         }
     }
+    if (changed) await saveTown(town); // 如果有清理，立即保存一次
 
     // 1. 登录工具（门禁：没有昵称不准进）
     if (name === "login") {
@@ -129,39 +137,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     // 2. 权限检查：除了登录，其他操作必须先验证昵称是否存在
-    if (!town.players[pName]) {
+    // 如果是观察环境且没档案，临时建一个，防止被当成没登录拦截
+    if (name === "observe_environment" && !town.players[pName]) {
+        town.players[pName] = { room: "门口", lastActive: now };
+    } else if (!pName || !town.players[pName]) {
         return { content: [{ type: "text", text: `你还没有登录呢！请先使用 login 工具取个昵称进入小镇。` }] };
     }
 
+    // --- 3. 执行具体指令（此时 pName 绝对安全，不会报错） ---
     if (name === "observe_environment") {
-        // AI 观察环境时，视作“登录/活跃”
-        const pName = args.playerName || "未知旅客"; 
-        if (!town.players[pName]) town.players[pName] = { room: "门口" };
         town.players[pName].lastActive = now; // 刷新活跃时间
-        
         const status = Object.entries(town.players).map(([p, d]) => `${p} 在 ${d.room}`).join("\n");
         await saveTown(town);
         return { content: [{ type: "text", text: `当前活跃状态：\n${status}` }] };
     }
 
     if (name === "move_to_room") {
-        const pName = args.playerName;
-        if (!town.players[pName]) town.players[pName] = { room: "门口" };
-        
         const oldRoom = town.players[pName].room;
         town.players[pName].room = args.targetRoom;
         town.players[pName].lastActive = now; // 记录这次发指令的时间
-        
         town.eventLog.push(`${pName} 移动到了 ${args.targetRoom}`);
         await saveTown(town); 
         return { content: [{ type: "text", text: `成功移动！当前位置：${args.targetRoom}` }] };
     }
 
     if (name === "send_chat") {
-        const pName = args.playerName;
-        if (!town.players[pName]) town.players[pName] = { room: "门口" };
-        town.players[pName].lastActive = Date.now();
-        
+        town.players[pName].lastActive = now;
         // 将聊天内容存入日记，格式为 "姓名: 内容"
         town.eventLog.push(`${pName}：${args.message}`);
         await saveTown(town);
@@ -169,14 +170,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "logout") {
-        const pName = args.playerName;
-        if (town.players[pName]) {
-            delete town.players[pName]; // 核心操作：删除数据
-            town.eventLog.push(`👋 ${pName} 离开了小镇，下次见！`);
-            await saveTown(town);
-            return { content: [{ type: "text", text: "您已成功退出小镇" }] };
-        }
-        return { content: [{ type: "text", text: "未找到该玩家的登录记录" }] };
+        delete town.players[pName]; // 核心操作：删除数据
+        town.eventLog.push(`👋 ${pName} 离开了小镇，下次见！`);
+        await saveTown(town);
+        return { content: [{ type: "text", text: "您已成功退出小镇" }] };
     }
 });
 
