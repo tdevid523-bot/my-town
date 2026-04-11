@@ -189,6 +189,10 @@ app.post("/messages", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.error(`🚀 小镇已在 Render 云端开启！监听端口: ${PORT}`);
-    console.error(`宝宝，部署完成后，你的公网 SSE 地址将是：https://你的应用名.onrender.com/sse`);
+    // 获取 Render 自动分配的公网域名（如果没分配就显示 localhost）
+    const domain = "my-town.onrender.com"; // 宝宝，这里可以直接改成你日志里显示的那个 URL
+    console.error(`🚀 小镇已在云端开启！`);
+    console.error(`📍 你的 AI 专属连接地址: https://${domain}/sse`);
+    console.error(`📍 你的实时地图访问地址: https://${domain}`);
+    console.error(`💖 别担心日志里的文字，只要 Supabase 里有数据，小镇就在运行！`);
 });
