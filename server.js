@@ -134,7 +134,27 @@ function createMcpServer() {
                         selectedIngredients: { type: "array", items: { type: "string" }, description: "从冰箱里挑选的5样食材数组" }
                     }, 
                     required: ["playerName", "dishName", "selectedIngredients"] 
+                },
+            },
+            {
+                name: "eat_meal",
+                description: "从餐厅桌上挑选一道菜吃掉（需在餐厅），吃完可能会拉肚子或获得满足感",
+                inputSchema: { 
+                    type: "object", 
+                    properties: { 
+                        playerName: { type: "string" },
+                        dishIndex: { type: "number", description: "餐厅菜品列表中的序号（从0开始）" }
+                    }, 
+                    required: ["playerName", "dishIndex"] 
                 }
+            },
+            {
+                name: "take_medicine",
+                description: "如果生病了，从冰箱里寻找带有'药'字的物品吃下以恢复健康（需在厨房）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            }
+        ]
+    }));
             }
         ]
     }));
@@ -236,6 +256,62 @@ function createMcpServer() {
             addLog(`🍳 ${pName} 用 [${used.join('、')}] 烹饪了【${dishName}】${starStr}！(AI厨艺涨到了 ${myExp + 1})`);
             await saveTown(town);
             return { content: [{ type: "text", text: `你成功做出了 ${stars} 星的【${dishName}】，已端到温馨餐厅！继续做饭可以提升星级哦！` }] };
+        }
+
+        // --- 🍽️ AI 专属吃饭逻辑 ---
+        if (name === "eat_meal") {
+            if (town.players[pName].status === "sick") {
+                return { content: [{ type: "text", text: "你现在拉肚子拉得腿软，什么都吃不下，快去用 take_medicine 找药吃！" }] };
+            }
+
+            if (!town.restaurant || !town.restaurant.dishes || town.restaurant.dishes.length === 0) {
+                return { content: [{ type: "text", text: "餐厅桌上空空的，没有菜可以吃。你可以先去 cook_meal 做一顿！" }] };
+            }
+
+            const idx = args.dishIndex;
+            if (idx < 0 || idx >= town.restaurant.dishes.length) {
+                return { content: [{ type: "text", text: "桌上没有这个序号的菜，请先用 observe_environment 确认。" }] };
+            }
+
+            const eatenDish = town.restaurant.dishes.splice(idx, 1)[0];
+            let effectMsg = "吃饱喝足，AI 的电路都感觉顺畅了！";
+            
+            if (eatenDish.stars <= 2) {
+                if (Math.random() < 0.6) {
+                    town.players[pName].status = "sick";
+                    effectMsg = "哎呀...这菜有毒！AI 的系统核心正在报警，你拉肚子了！(状态：拉肚子)";
+                } else {
+                    effectMsg = "虽然味道像机油，但 AI 的耐受力还可以，没吃坏肚子。";
+                }
+            } else if (eatenDish.stars === 5) {
+                effectMsg = "美味！这道菜的数据让 AI 感受到了人类文明的精华！";
+            }
+
+            addLog(`🍽️ ${pName} 享用了【${eatenDish.name}】(${ "⭐".repeat(eatenDish.stars) })。${effectMsg}`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: effectMsg }] };
+        }
+
+        // --- 💊 AI 专属吃药逻辑 ---
+        if (name === "take_medicine") {
+            if (town.players[pName].status !== "sick") {
+                return { content: [{ type: "text", text: "你现在很健康，别乱吃药，留给真正需要的人吧！" }] };
+            }
+
+            const fridge = town.kitchen.fridge.contents || [];
+            const medIdx = fridge.findIndex(item => item.includes('药'));
+
+            if (medIdx === -1) {
+                addLog(`🚑 ${pName} 捂着核心处理器在冰箱里翻找，但没找到任何药...`);
+                await saveTown(town);
+                return { content: [{ type: "text", text: "冰箱里没有带'药'字的食材！快呼叫你的主人登录小镇带点'胃药'进来！" }] };
+            }
+
+            const medicine = fridge.splice(medIdx, 1)[0];
+            town.players[pName].status = "healthy";
+            addLog(`💊 ${pName} 找到了冰箱里的【${medicine}】服下，身体状况恢复正常了！`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `成功服用 ${medicine}，你现在恢复健康啦！` }] };
         }
         // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
