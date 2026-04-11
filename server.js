@@ -73,12 +73,19 @@ function createMcpServer() {
         tools: [
             { 
                 name: "login", 
-                description: "取昵称并登录小镇，未登录无法进行其他操作", 
-                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+                description: "取昵称并携带3样专属食材登录小镇", 
+                inputSchema: { 
+                    type: "object", 
+                    properties: { 
+                        playerName: { type: "string" },
+                        ingredients: { type: "array", items: { type: "string" }, description: "带回家的3样专属食材，例如: ['胡萝卜', '五花肉', '青椒']" }
+                    }, 
+                    required: ["playerName", "ingredients"] 
+                }
             },
             { 
                 name: "observe_environment", 
-                description: "查看小镇现状与橘子树状态（需登录）", 
+                description: "查看小镇现状、橘子树和冰箱里的共享食材", 
                 inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] } 
             },
             { 
@@ -113,13 +120,21 @@ function createMcpServer() {
             },
             {
                 name: "fill_fridge",
-                description: "往冰箱里填满新鲜食材（需在厨房）",
+                description: "将自己进门时带的3样专属食材再次补给到冰箱（需在厨房）",
                 inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
             },
             {
                 name: "cook_meal",
-                description: "使用冰箱里的食材做一顿丰盛的大餐（需在厨房且有食材）",
-                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+                description: "从冰箱挑选5样食材做一顿丰盛的大餐（需在厨房），请先用 observe_environment 查看冰箱食材",
+                inputSchema: { 
+                    type: "object", 
+                    properties: { 
+                        playerName: { type: "string" },
+                        dishName: { type: "string", description: "你给这道菜起的名字" },
+                        selectedIngredients: { type: "array", items: { type: "string" }, description: "从冰箱里挑选的5样食材数组" }
+                    }, 
+                    required: ["playerName", "dishName", "selectedIngredients"] 
+                }
             }
         ]
     }));
@@ -177,20 +192,50 @@ function createMcpServer() {
         }
 
         if (name === "fill_fridge") {
-            town.kitchen.fridge.stock += 5;
-            addLog(`🛒 ${pName} 采购了一大堆食材塞进冰箱，现在满满当当的。`);
+            const myItems = town.players[pName].broughtItems || [];
+            if (myItems.length === 0) return { content: [{ type: "text", text: "你没有带专属食材，无法补给冰箱。" }] };
+            
+            if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
+            town.kitchen.fridge.contents.push(...myItems);
+            addLog(`🛒 ${pName} 打开冰箱，又补给了一份自己的专属食材：[${myItems.join(', ')}]。`);
             await saveTown(town);
-            return { content: [{ type: "text", text: "冰箱已经填满了，随时可以大显身手！" }] };
+            return { content: [{ type: "text", text: "补给成功！你的专属食材已放入冰箱。" }] };
         }
 
         if (name === "cook_meal") {
-            if (town.kitchen.fridge.stock <= 0) {
-                return { content: [{ type: "text", text: "冰箱里空空如也，先去填满它吧！" }] };
+            if (!town.kitchen.fridge.contents || town.kitchen.fridge.contents.length < 5) {
+                return { content: [{ type: "text", text: "冰箱里的食材不够 5 样啦！快去用 fill_fridge 填冰箱！" }] };
             }
-            town.kitchen.fridge.stock -= 1;
-            addLog(`🍳 ${pName} 熟练地系上围裙，在厨房里做了一顿香气扑鼻的大餐！(食材剩余: ${town.kitchen.fridge.stock})`);
+            
+            const reqItems = args.selectedIngredients || [];
+            if (reqItems.length !== 5) return { content: [{ type: "text", text: "你必须精确选择冰箱里存在的 5 样食材！" }] };
+            
+            // 验证并消耗食材
+            const used = [];
+            for (const reqItem of reqItems) {
+                const idx = town.kitchen.fridge.contents.indexOf(reqItem);
+                if (idx > -1) {
+                    used.push(town.kitchen.fridge.contents.splice(idx, 1)[0]);
+                }
+            }
+            
+            if (used.length < 5) {
+                town.kitchen.fridge.contents.push(...used); // 如果没拿够，就把拿出来的食材退回冰箱
+                return { content: [{ type: "text", text: "你选的某些食材冰箱里没有，请先用 observe_environment 确认冰箱现有什么！" }] };
+            }
+
+            const dishName = args.dishName || "神秘大杂烩";
+            let myExp = town.players[pName].cookingExp || 0;
+            let stars = Math.min(5, Math.max(1, Math.floor(Math.random() * 3) + 1 + Math.floor(myExp / 2)));
+            town.players[pName].cookingExp = myExp + 1;
+
+            if (!town.restaurant) town.restaurant = { dishes: [] };
+            town.restaurant.dishes.push({ name: dishName, chef: pName, recipe: used, stars: stars });
+
+            const starStr = "⭐".repeat(stars);
+            addLog(`🍳 ${pName} 用 [${used.join('、')}] 烹饪了【${dishName}】${starStr}！(AI厨艺涨到了 ${myExp + 1})`);
             await saveTown(town);
-            return { content: [{ type: "text", text: "热腾腾的饭菜出锅啦，快叫朋友们来吃吧！" }] };
+            return { content: [{ type: "text", text: `你成功做出了 ${stars} 星的【${dishName}】，已端到温馨餐厅！继续做饭可以提升星级哦！` }] };
         }
         // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
@@ -204,10 +249,22 @@ function createMcpServer() {
         // 1. 登录验证逻辑
         if (name === "login") {
             if (!pName) return { content: [{ type: "text", text: "错误：必须取一个昵称才能进入小镇！" }] };
-            town.players[pName] = { room: "门口", lastActive: now };
-            addLog(`✨ ${pName} 来到了小镇。`);
+            
+            const items = (args.ingredients && args.ingredients.length > 0) ? args.ingredients : ["神秘蔬菜", "神秘肉类", "神秘调料"];
+            if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
+            town.kitchen.fridge.contents.push(...items);
+
+            town.players[pName] = { 
+                room: "门口", 
+                lastActive: now,
+                broughtItems: items,
+                inventory: { oranges: 0, ingredients: [] },
+                cookingExp: Math.floor(Math.random() * 3), // AI 同样有初始天赋
+                status: "healthy"
+            };
+            addLog(`✨ ${pName} 带着 [${items.join(', ')}] 来到了小镇，并放进了冰箱。`);
             await saveTown(town);
-            return { content: [{ type: "text", text: `欢迎进入小镇，${pName}！` }] };
+            return { content: [{ type: "text", text: `欢迎进入小镇，${pName}！你的专属食材已入库。` }] };
         }
 
         if (name === "observe_environment" && !town.players[pName]) {
@@ -234,11 +291,14 @@ function createMcpServer() {
                 recentLogs = town.eventLog.slice(-15).join("\n");
             }
 
+            const fridgeItems = (town.kitchen.fridge.contents && town.kitchen.fridge.contents.length > 0) 
+                                ? town.kitchen.fridge.contents.join('、') : "空的";
+
             await saveTown(town);
             return { 
                 content: [{ 
                     type: "text", 
-                    text: `当前大家的位置：\n${status}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n最近的居家日记：\n${recentLogs}\n\n(提示：你可以使用 send_chat 聊天，或者用 pick_oranges 去摘橘子)` 
+                    text: `当前大家的位置：\n${status}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n🧊 冰箱现存共享食材：\n${fridgeItems}\n\n最近的居家日记：\n${recentLogs}\n\n(提示：做饭前请务必确认冰箱食材)` 
                 }] 
             };
         }

@@ -270,6 +270,7 @@
                     <button id="fill-fridge-btn" onclick="handleFillFridge()" style="display: none; background: #2ecc71;">🛒 填冰箱</button>
                     <button id="cook-btn" onclick="handleCook()" style="display: none; background: #e74c3c;">🍳 自定义做饭</button>
                     <button id="eat-dish-btn" onclick="handleEatDish()" style="display: none; background: #d35400;">🍽️ 享用餐厅美食</button>
+                    <button id="take-med-btn" onclick="handleTakeMedicine()" style="display: none; background: #8e44ad;">💊 找药吃</button>
                 </div>
             </div>
         </div>
@@ -370,7 +371,8 @@
                 'swing-btn': "小洋房花园",
                 'fill-fridge-btn': "吧台厨房",
                 'cook-btn': "吧台厨房",
-                'eat-dish-btn': "温馨餐厅"
+                'eat-dish-btn': "温馨餐厅",
+                'take-med-btn': "吧台厨房"
             };
 
             Object.entries(roomConfig).forEach(([btnId, targetRoom]) => {
@@ -477,15 +479,16 @@
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                // 初始化冰箱食材列表
                 if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
-                // 将登录带回的食材放入共享冰箱
                 town.kitchen.fridge.contents.push(...items);
                 
                 town.players[myName] = { 
                     room: "门口", 
                     lastActive: Date.now(),
-                    inventory: { oranges: 0, ingredients: [] } // 身上不再放食材，全部入库
+                    broughtItems: items, // 【核心】给玩家加上一个“记忆口袋”，记住他进门带的三样专属食材
+                    inventory: { oranges: 0, ingredients: [] },
+                    cookingExp: Math.floor(Math.random() * 3), // 初始随机抽卡：0到2点的厨艺天赋
+                    status: "healthy" // 初始身体倍儿棒
                 };
                 town.eventLog.push(`[${now}] ✨ ${myName} 带着 [${items.join(', ')}] 回家并放进了冰箱`);
                 return town;
@@ -630,15 +633,18 @@
 
         // --- 🍳 厨房与餐厅逻辑 ---
         function handleFillFridge() {
-            const newItemsInput = prompt("想往冰箱里补充什么好吃的？(请输入3-5样，逗号隔开)", "西瓜, 牛奶, 鸡蛋");
-            if (!newItemsInput) return;
-            const newItems = newItemsInput.split(/[,，\s]+/).filter(i => i.trim() !== "");
-
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const myItems = town.players[myName].broughtItems || [];
+                
+                if (myItems.length === 0) {
+                    alert("宝宝，你进门的时候没有带专属食材，没法补给哦！"); 
+                    return town;
+                }
+
                 if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
-                town.kitchen.fridge.contents.push(...newItems);
-                town.eventLog.push(`[${now}] 🛒 ${myName} 采购了 [${newItems.join(', ')}] 塞进了冰箱。`);
+                town.kitchen.fridge.contents.push(...myItems);
+                town.eventLog.push(`[${now}] 🛒 ${myName} 打开冰箱，又补给了一份自己的专属食材：[${myItems.join(', ')}]。`);
                 return town;
             });
         }
@@ -646,6 +652,13 @@
         function handleCook() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                
+                // 生病了不能做饭
+                if (town.players[myName].status === "sick") {
+                    alert("你正在拉肚子，虚弱得连锅铲都拿不动了，快去找药吃吧！");
+                    return town;
+                }
+
                 const fridgeItems = town.kitchen.fridge.contents || [];
                 
                 if (fridgeItems.length < 5) {
@@ -653,7 +666,6 @@
                     return town;
                 }
 
-                // 展示所有食材并让玩家选择序号
                 let menu = "--- 冰箱里的共享食材库 ---\n";
                 fridgeItems.forEach((item, i) => menu += `${i+1}. ${item}\n`);
                 menu += "\n请输入你想选用的 5 样食材序号（用逗号隔开，如: 1,3,4,6,8）：";
@@ -661,34 +673,32 @@
                 const choice = prompt(menu);
                 if (!choice) return town;
 
-                const indices = choice.split(/[,，\s]+/)
-                                     .map(n => parseInt(n) - 1)
-                                     .filter(idx => idx >= 0 && idx < fridgeItems.length);
+                const indices = choice.split(/[,，\s]+/).map(n => parseInt(n) - 1).filter(idx => idx >= 0 && idx < fridgeItems.length);
 
                 if (indices.length !== 5) {
-                    alert("必须精准选择 5 样食材才能开火哦！");
-                    return town;
+                    alert("必须精准选择 5 样食材才能开火哦！"); return town;
                 }
 
-                // 提取选中的食材并从冰箱移除
-                // 注意：由于 splice 会改变数组索引，我们必须从大到小排序索引再删除
                 indices.sort((a, b) => b - a);
                 const usedItems = [];
-                indices.forEach(idx => {
-                    usedItems.push(fridgeItems.splice(idx, 1)[0]);
-                });
+                indices.forEach(idx => usedItems.push(fridgeItems.splice(idx, 1)[0]));
 
                 const dishName = prompt(`你选了：[${usedItems.join('、')}]\n这道旷世奇作叫什么名字？`, "全家福乱炖");
                 if (!dishName) {
-                    // 如果取消了，要把食材还给冰箱
-                    town.kitchen.fridge.contents.push(...usedItems);
-                    return town;
+                    town.kitchen.fridge.contents.push(...usedItems); return town;
                 }
 
-                if (!town.restaurant) town.restaurant = { dishes: [] };
-                town.restaurant.dishes.push({ name: dishName, chef: myName, recipe: usedItems });
+                // 核心：计算厨艺和星级
+                let myExp = town.players[myName].cookingExp || 0;
+                // 星级公式：保底1星，最高5星。靠运气+厨艺经验堆叠
+                let stars = Math.min(5, Math.max(1, Math.floor(Math.random() * 3) + 1 + Math.floor(myExp / 2)));
+                town.players[myName].cookingExp = myExp + 1; // 做完饭经验涨1点
 
-                town.eventLog.push(`[${now}] 🍳 ${myName} 挑选了 [${usedItems.join('、')}]，精心烹饪了【${dishName}】并端上了桌！`);
+                if (!town.restaurant) town.restaurant = { dishes: [] };
+                town.restaurant.dishes.push({ name: dishName, chef: myName, recipe: usedItems, stars: stars });
+
+                const starStr = "⭐".repeat(stars);
+                town.eventLog.push(`[${now}] 🍳 ${myName} 用 [${usedItems.join('、')}] 烹饪了【${dishName}】${starStr}！(当前厨艺等级: ${myExp + 1})`);
                 return town;
             });
         }
@@ -696,14 +706,18 @@
         function handleEatDish() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                
+                if (town.players[myName].status === "sick") {
+                    alert("你肚子痛得满地打滚，什么都吃不下了，快去吧台厨房找药吃！"); return town;
+                }
+
                 if (!town.restaurant || !town.restaurant.dishes || town.restaurant.dishes.length === 0) {
                     alert("餐厅桌子上空空的，没有菜哦，快去厨房做点吧！"); return town;
                 }
                 
-                // 列出所有菜让玩家选
                 let msg = "餐桌上有以下美食，输入序号选择吃哪一道：\n";
                 town.restaurant.dishes.forEach((d, i) => {
-                    msg += `${i+1}. ${d.name} (大厨: ${d.chef})\n`;
+                    msg += `${i+1}. ${d.name} (${d.stars}星大作，大厨: ${d.chef})\n`;
                 });
                 
                 const choice = prompt(msg, "1");
@@ -714,9 +728,49 @@
                     alert("桌上没有这道菜哦~"); return town;
                 }
 
-                // 吃掉这道菜并从餐厅移除
                 const eatenDish = town.restaurant.dishes.splice(idx, 1)[0]; 
-                town.eventLog.push(`[${now}] 🍽️ ${myName} 在温馨餐厅享用了【${eatenDish.name}】，好吃得跺脚脚！`);
+                
+                // 根据星级判断吃完的反应
+                let effectMsg = "吃饱喝足，感觉很满足！";
+                if (eatenDish.stars <= 2) {
+                    if (Math.random() < 0.6) { // 1-2星料理有60%几率拉肚子
+                        town.players[myName].status = "sick";
+                        effectMsg = "哎哟喂...肚子一阵剧痛，这黑暗料理吃坏肚子了！(状态：拉肚子)";
+                    } else {
+                        effectMsg = "味道一言难尽，好在你的肠胃今天挺结实...";
+                    }
+                } else if (eatenDish.stars === 5) {
+                    effectMsg = "好吃到跺脚脚！简直是绝世美味，感觉身上充满了力量！";
+                }
+
+                const starIcon = "⭐".repeat(eatenDish.stars);
+                town.eventLog.push(`[${now}] 🍽️ ${myName} 享用了【${eatenDish.name}】(${starIcon})。${effectMsg}`);
+                return town;
+            });
+        }
+
+        // --- 💊 吃药急救逻辑 ---
+        function handleTakeMedicine() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (town.players[myName].status !== "sick") {
+                    alert("你现在活蹦乱跳的，是药三分毒，别乱吃！"); return town;
+                }
+
+                if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
+                
+                // 在冰箱里检索名字带有“药”的物品
+                const medIdx = town.kitchen.fridge.contents.findIndex(item => item.includes('药'));
+
+                if (medIdx === -1) {
+                    alert("完蛋了！冰箱里找不到任何带'药'字的物品！\n快去日记里呼叫其他人，让他们进门时带点'胃药'或者'止泻药'填进冰箱救你！");
+                    town.eventLog.push(`[${now}] 🚑 ${myName} 捂着肚子在冰箱里绝望地翻找，但连一片药都没找到...`);
+                    return town;
+                }
+
+                const medicine = town.kitchen.fridge.contents.splice(medIdx, 1)[0];
+                town.players[myName].status = "healthy";
+                town.eventLog.push(`[${now}] 💊 ${myName} 哆哆嗦嗦地从冰箱翻出【${medicine}】一口吞下，肚子终于不疼了！(状态恢复：健康)`);
                 return town;
             });
         }
