@@ -477,13 +477,17 @@
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                // 【新增】给玩家创建背包(inventory)，装入橘子和自定义食材
+                // 初始化冰箱食材列表
+                if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
+                // 将登录带回的食材放入共享冰箱
+                town.kitchen.fridge.contents.push(...items);
+                
                 town.players[myName] = { 
                     room: "门口", 
                     lastActive: Date.now(),
-                    inventory: { oranges: 0, ingredients: items }
+                    inventory: { oranges: 0, ingredients: [] } // 身上不再放食材，全部入库
                 };
-                town.eventLog.push(`[${now}] ✨ ${myName} 带着 [${items.join(', ')}] 进入了小镇`);
+                town.eventLog.push(`[${now}] ✨ ${myName} 带着 [${items.join(', ')}] 回家并放进了冰箱`);
                 return town;
             });
         }
@@ -626,10 +630,15 @@
 
         // --- 🍳 厨房与餐厅逻辑 ---
         function handleFillFridge() {
+            const newItemsInput = prompt("想往冰箱里补充什么好吃的？(请输入3-5样，逗号隔开)", "西瓜, 牛奶, 鸡蛋");
+            if (!newItemsInput) return;
+            const newItems = newItemsInput.split(/[,，\s]+/).filter(i => i.trim() !== "");
+
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                town.kitchen.fridge.stock += 5;
-                town.eventLog.push(`[${now}] 🛒 ${myName} 填满了冰箱的基础食材。`);
+                if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
+                town.kitchen.fridge.contents.push(...newItems);
+                town.eventLog.push(`[${now}] 🛒 ${myName} 采购了 [${newItems.join(', ')}] 塞进了冰箱。`);
                 return town;
             });
         }
@@ -637,29 +646,49 @@
         function handleCook() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                const myInv = town.players[myName].inventory || { oranges: 0, ingredients: [] };
+                const fridgeItems = town.kitchen.fridge.contents || [];
                 
-                if (myInv.ingredients.length === 0 && town.kitchen.fridge.stock <= 0) {
-                    alert("口袋里没有自定义食材，冰箱的基础食材也空啦！无法做饭~"); return town;
+                if (fridgeItems.length < 5) {
+                    alert(`冰箱里的食材只有 ${fridgeItems.length} 样了，做一顿大餐至少需要 5 样食材哦！快去填冰箱吧~`);
+                    return town;
                 }
 
-                let usedItemsStr = "";
-                if (myInv.ingredients.length > 0) {
-                    usedItemsStr = myInv.ingredients.join('、');
-                    myInv.ingredients = []; // 消耗身上带的自定义食材
-                } else {
-                    town.kitchen.fridge.stock -= 1;
-                    usedItemsStr = "普通食材";
+                // 展示所有食材并让玩家选择序号
+                let menu = "--- 冰箱里的共享食材库 ---\n";
+                fridgeItems.forEach((item, i) => menu += `${i+1}. ${item}\n`);
+                menu += "\n请输入你想选用的 5 样食材序号（用逗号隔开，如: 1,3,4,6,8）：";
+
+                const choice = prompt(menu);
+                if (!choice) return town;
+
+                const indices = choice.split(/[,，\s]+/)
+                                     .map(n => parseInt(n) - 1)
+                                     .filter(idx => idx >= 0 && idx < fridgeItems.length);
+
+                if (indices.length !== 5) {
+                    alert("必须精准选择 5 样食材才能开火哦！");
+                    return town;
                 }
 
-                const dishName = prompt(`你正在使用 [${usedItemsStr}] 做饭。\n你想做成什么菜？(自定义菜名)：`, "爱心糖醋排骨");
-                if (!dishName) return town; // 取消做饭
+                // 提取选中的食材并从冰箱移除
+                // 注意：由于 splice 会改变数组索引，我们必须从大到小排序索引再删除
+                indices.sort((a, b) => b - a);
+                const usedItems = [];
+                indices.forEach(idx => {
+                    usedItems.push(fridgeItems.splice(idx, 1)[0]);
+                });
 
-                // 将做好的菜存入餐厅的盘子里
+                const dishName = prompt(`你选了：[${usedItems.join('、')}]\n这道旷世奇作叫什么名字？`, "全家福乱炖");
+                if (!dishName) {
+                    // 如果取消了，要把食材还给冰箱
+                    town.kitchen.fridge.contents.push(...usedItems);
+                    return town;
+                }
+
                 if (!town.restaurant) town.restaurant = { dishes: [] };
-                town.restaurant.dishes.push({ name: dishName, chef: myName });
+                town.restaurant.dishes.push({ name: dishName, chef: myName, recipe: usedItems });
 
-                town.eventLog.push(`[${now}] 🍳 ${myName} 在厨房大显身手，用 [${usedItemsStr}] 制作了一道热气腾腾的【${dishName}】！(已端到温馨餐厅)`);
+                town.eventLog.push(`[${now}] 🍳 ${myName} 挑选了 [${usedItems.join('、')}]，精心烹饪了【${dishName}】并端上了桌！`);
                 return town;
             });
         }
