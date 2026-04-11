@@ -209,7 +209,8 @@ app.get('/', (req, res) => {
 });
 // ---------------------------------------
 
-let sseTransport = null;
+// 核心修复：用 Map 存储所有的 AI 连接，变成“多座位沙发”
+const transports = new Map();
 
 app.get("/sse", async (req, res) => {
     // 针对 Render 平台的 SSE 优化，防止数据发不出来
@@ -218,13 +219,32 @@ app.get("/sse", async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); 
 
-    sseTransport = new SSEServerTransport("/messages", res);
-    await server.connect(sseTransport);
+    // 1. 为当前连进来的 AI 创建一个专属通道
+    const transport = new SSEServerTransport("/messages", res);
+    
+    // 2. 把通道存进 Map 里，钥匙就是它自带的 sessionId
+    transports.set(transport.sessionId, transport);
+    
+    // 3. 将这个专属通道连上小镇
+    await server.connect(transport);
+
+    // 4. 当 AI 断开连接或退出时，把它的专属通道清理掉，释放内存
+    res.on('close', () => {
+        transports.delete(transport.sessionId);
+    });
 });
 
 app.post("/messages", async (req, res) => {
-    if (sseTransport) await sseTransport.handlePostMessage(req, res);
-    else res.status(400).send("No transport");
+    // MCP 会自动在请求网址后面带上 ?sessionId=xxxx
+    const sessionId = req.query.sessionId;
+    const transport = transports.get(sessionId);
+
+    // 根据 sessionId 找到对应的通道，把消息精准传达
+    if (transport) {
+        await transport.handlePostMessage(req, res);
+    } else {
+        res.status(404).send("找不到这个 AI 的专属通道");
+    }
 });
 
 app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
