@@ -283,40 +283,89 @@
         const SUPABASE_KEY = "你的anon_key";
 
         async function syncTownState() {
+            console.log("🕵️ 侦探模式：正在尝试从 Supabase 获取数据...");
             try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/town_state?id=eq.1`, {
-                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-                });
-                const rows = await response.json();
-                const town = rows[0].data;
+                const requestUrl = `${SUPABASE_URL}/rest/v1/town_state?id=eq.1`;
+                console.log("🔗 请求地址:", requestUrl);
 
-                renderPlayers(town.players);
-                updateLogs(town.eventLog);
-            } catch (e) { console.error("同步失败", e); }
+                const response = await fetch(requestUrl, {
+                    headers: { 
+                        "apikey": SUPABASE_KEY, 
+                        "Authorization": `Bearer ${SUPABASE_KEY}` 
+                    }
+                });
+
+                console.log("📥 收到响应状态:", response.status, response.statusText);
+
+                if (!response.ok) {
+                    const errorDetail = await response.text();
+                    console.error("❌ 响应不成功，详细错误:", errorDetail);
+                    return;
+                }
+
+                const rows = await response.json();
+                console.log("📊 原始数据行:", rows);
+
+                if (rows && rows.length > 0 && rows[0].data) {
+                    const town = rows[0].data;
+                    console.log("✅ 成功解析小镇数据:", town);
+                    renderPlayers(town.players);
+                    updateLogs(town.eventLog);
+                } else {
+                    console.warn("⚠️ 警告：数据库里虽然有表，但可能没有 id=1 的那一行数据！");
+                }
+            } catch (e) {
+                console.error("🚫 侦探发现异常崩溃:", e);
+            }
         }
 
         function renderPlayers(players) {
             const map = document.getElementById('map');
             const playerEntries = Object.entries(players);
 
+            // 获取地图上所有现有的头像 ID，用于后续清理离开的人
+            const currentPlayerIds = playerEntries.map(([name]) => `char-${name}`);
+            const allAvatars = document.querySelectorAll('.avatar');
+            allAvatars.forEach(av => {
+                if (!currentPlayerIds.includes(av.id)) av.remove();
+            });
+
             playerEntries.forEach(([name, data], index) => {
                 let avatar = document.getElementById(`char-${name}`);
+                
+                // 1. 如果是新加入的角色，创建它的化身
                 if (!avatar) {
-                    // 如果是新来的 AI，动态创建图标
                     avatar = document.createElement('div');
                     avatar.id = `char-${name}`;
                     avatar.className = 'avatar';
                     avatar.innerHTML = `<div class="name-tag">${name}</div>`;
-                    // 赋予随机颜色，或者根据名字固定颜色
-                    avatar.style.background = name === '小橘' ? '#ff7f50' : '#3498db';
                     map.appendChild(avatar);
                 }
 
+                // 2. 身份辨认逻辑：通过颜色和特效区分
+                if (name === '小橘') {
+                    // 宝宝（你）的专属色：温暖的暖橙色
+                    avatar.style.background = '#ff8c00'; 
+                    avatar.style.boxShadow = '0 0 15px #ff8c00'; // 给宝宝加个专属光环
+                    avatar.style.zIndex = '1000'; // 确保宝宝在最上层
+                } else if (name === 'Galen') {
+                    // 老公 Galen 的专属色：深邃的海洋蓝
+                    avatar.style.background = '#3498db';
+                    avatar.style.boxShadow = '0 0 10px rgba(52, 152, 219, 0.5)';
+                } else {
+                    // 其他 AI 邻居：中性的石灰色或随机色
+                    avatar.style.background = '#7f8c8d';
+                    avatar.style.boxShadow = 'none';
+                }
+
+                // 3. 计算位置与处理重叠
                 const basePos = roomCoords[data.room] || roomCoords["门口"];
-                // 简单的碰撞偏移：如果是多个人，按索引排开
-                const offset = index * 2; 
-                avatar.style.left = (basePos.x + offset) + "%";
-                avatar.style.top = (basePos.y + offset) + "%";
+                // 每个人在房间里稍微错开一点点，避免完美重叠
+                const nudgeX = (index % 3) * 3; 
+                const nudgeY = Math.floor(index / 3) * 3;
+
+                avatar.style.left = (basePos.x + nudgeX) + "%";
+                avatar.style.top = (basePos.y + nudgeY) + "%";
             });
         }
 
