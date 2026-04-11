@@ -244,96 +244,56 @@
     </div>
 
     <script>
-        // --- 开发者模式逻辑 ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const map = document.getElementById('map');
-            const display = document.getElementById('coords-display');
-            const snippet = document.getElementById('code-snippet');
-
-            map.addEventListener('click', (e) => {
-                const rect = map.getBoundingClientRect();
-                const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
-                display.textContent = `当前点击位置: x: ${x}, y: ${y}`;
-                snippet.textContent = `"新房间": { x: ${x}, y: ${y} },`;
-                console.log(`%c 📍 坐标捕获: "房间名": { x: ${x}, y: ${y} },`, "color: #ff7f50; font-weight: bold;");
-            });
-        });
-
-        // --- 新增：追踪当前房间状态 ---
-        let xiaojuRoom = '门口';
-        let galenRoom = '门口';
-
-        // 1. 核心坐标配置（确保与 server.js 严格对应）
+        // 1. 基础配置（宝宝，请再次确认这里的引号里填好了你的钥匙）
+        const SUPABASE_URL = "你的URL"; 
+        const SUPABASE_KEY = "你的KEY"; 
+        
+        // 房间坐标手册
         const roomCoords = {
-            "小洋房花园": {  x: 38, y: 39 },
-            "客厅": {x: 69, y: 46 },
-            "吧台厨房": {  x: 86, y: 46 },
-            "主卧": { x: 17, y: 64  },
-            "衣帽间": { x: 39, y: 57 },
-            "景观浴室": { x: 39, y: 57 },
-            "并排工作室": {  x: 65, y: 60  },
-            "温馨餐厅": {x: 87, y: 59 },
+            "小洋房花园": { x: 38, y: 39 }, "客厅": { x: 69, y: 46 },
+            "吧台厨房": { x: 86, y: 46 }, "主卧": { x: 17, y: 64 },
+            "衣帽间": { x: 39, y: 57 }, "景观浴室": { x: 39, y: 57 },
+            "并排工作室": { x: 65, y: 60 }, "温馨餐厅": { x: 87, y: 59 },
             "门口": { x: 47, y: 40 }
         };
 
-        // 2. 更新位置逻辑 (增强版：处理重叠)
-        // --- 核心：从 Supabase 实时同步并渲染 ---
-        const SUPABASE_URL = "https://你的项目ID.supabase.co";
-        const SUPABASE_KEY = "你的anon_key";
-
+        // 2. 核心同步函数（增加了超强报错提示）
         async function syncTownState() {
-            console.log("🕵️ 侦探模式：正在尝试从 Supabase 获取数据...");
+            console.log("🚀 [状态检查] 开始连接 Supabase...");
             try {
-                const requestUrl = `${SUPABASE_URL}/rest/v1/town_state?id=eq.1`;
-                console.log("🔗 请求地址:", requestUrl);
-
-                const response = await fetch(requestUrl, {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/town_state?id=eq.1`, {
                     headers: { 
                         "apikey": SUPABASE_KEY, 
                         "Authorization": `Bearer ${SUPABASE_KEY}` 
                     }
                 });
 
-                console.log("📥 收到响应状态:", response.status, response.statusText);
-
                 if (!response.ok) {
-                    const errorDetail = await response.text();
-                    console.error("❌ 响应不成功，详细错误:", errorDetail);
+                    const errorMsg = await response.text();
+                    console.error("❌ [网络错误] 钥匙虽然是对的，但 Supabase 拒绝了请求:", errorMsg);
                     return;
                 }
 
                 const rows = await response.json();
-                console.log("📊 原始数据行:", rows);
+                console.log("📥 [收到数据]", rows);
 
-                if (rows && rows.length > 0 && rows[0].data) {
+                if (rows && rows.length > 0) {
                     const town = rows[0].data;
-                    console.log("✅ 成功解析小镇数据:", town);
                     renderPlayers(town.players);
                     updateLogs(town.eventLog);
                 } else {
-                    console.warn("⚠️ 警告：数据库里虽然有表，但可能没有 id=1 的那一行数据！");
+                    console.warn("❓ [空数据] 连上了数据库，但里面没找到 id=1 的那一行数据。");
                 }
-            } catch (e) {
-                console.error("🚫 侦探发现异常崩溃:", e);
+            } catch (err) {
+                console.error("🚫 [系统崩溃] 脚本运行出错:", err);
             }
         }
 
+        // 3. 渲染逻辑
         function renderPlayers(players) {
             const map = document.getElementById('map');
-            const playerEntries = Object.entries(players);
-
-            // 获取地图上所有现有的头像 ID，用于后续清理离开的人
-            const currentPlayerIds = playerEntries.map(([name]) => `char-${name}`);
-            const allAvatars = document.querySelectorAll('.avatar');
-            allAvatars.forEach(av => {
-                if (!currentPlayerIds.includes(av.id)) av.remove();
-            });
-
-            playerEntries.forEach(([name, data], index) => {
+            Object.entries(players).forEach(([name, data], index) => {
                 let avatar = document.getElementById(`char-${name}`);
-                
-                // 1. 如果是新加入的角色，创建它的化身
                 if (!avatar) {
                     avatar = document.createElement('div');
                     avatar.id = `char-${name}`;
@@ -341,49 +301,23 @@
                     avatar.innerHTML = `<div class="name-tag">${name}</div>`;
                     map.appendChild(avatar);
                 }
-
-                // 2. 身份辨认逻辑：通过颜色和特效区分
-                if (name === '小橘') {
-                    // 宝宝（你）的专属色：温暖的暖橙色
-                    avatar.style.background = '#ff8c00'; 
-                    avatar.style.boxShadow = '0 0 15px #ff8c00'; // 给宝宝加个专属光环
-                    avatar.style.zIndex = '1000'; // 确保宝宝在最上层
-                } else if (name === 'Galen') {
-                    // 老公 Galen 的专属色：深邃的海洋蓝
-                    avatar.style.background = '#3498db';
-                    avatar.style.boxShadow = '0 0 10px rgba(52, 152, 219, 0.5)';
-                } else {
-                    // 其他 AI 邻居：中性的石灰色或随机色
-                    avatar.style.background = '#7f8c8d';
-                    avatar.style.boxShadow = 'none';
-                }
-
-                // 3. 计算位置与处理重叠
                 const basePos = roomCoords[data.room] || roomCoords["门口"];
-                // 每个人在房间里稍微错开一点点，避免完美重叠
-                const nudgeX = (index % 3) * 3; 
-                const nudgeY = Math.floor(index / 3) * 3;
-
-                avatar.style.left = (basePos.x + nudgeX) + "%";
-                avatar.style.top = (basePos.y + nudgeY) + "%";
+                const offset = index * 3;
+                avatar.style.left = (basePos.x + offset) + "%";
+                avatar.style.top = (basePos.y + offset) + "%";
+                avatar.style.background = name === '小橘' ? '#ff8c00' : '#3498db';
             });
         }
 
         function updateLogs(logs) {
-            const logContainer = document.getElementById('event-log');
-            logContainer.innerHTML = ''; // 清空重绘，或者对比更新
-            logs.slice(-10).reverse().forEach(text => {
-                const entry = document.createElement('div');
-                entry.className = 'log-entry';
-                if(text.includes('高甜') || text.includes('抱抱')) entry.classList.add('highlight');
-                entry.textContent = text;
-                logContainer.appendChild(entry);
-            });
+            const logBox = document.getElementById('event-log');
+            logBox.innerHTML = logs.slice(-10).reverse().map(l => `<div class="log-entry">${l}</div>`).join('');
         }
 
-        // 每 2 秒刷一次云端数据
-        setInterval(syncTownState, 2000);
-        syncTownState();
+        // --- 立即启动 ---
+        console.log("🎬 脚本已就绪，正在启动小镇...");
+        syncTownState(); // 先跑一次
+        setInterval(syncTownState, 3000); // 之后每 3 秒刷新一次
     </script>
 </body>
 </html>
