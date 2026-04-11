@@ -156,8 +156,22 @@ function createMcpServer() {
         if (name === "observe_environment") {
             town.players[pName].lastActive = now; 
             const status = Object.entries(town.players).map(([p, d]) => `${p} 在 ${d.room}`).join("\n");
+            
+            // --- 核心修复：给 AI 加上“耳朵”，把最近的聊天和动态也发给它 ---
+            let recentLogs = "日记里空空的，暂时没有人说话。";
+            if (town.eventLog && town.eventLog.length > 0) {
+                // 提取最近的 8 条记录发给 AI，让它知道刚刚发生了什么
+                recentLogs = town.eventLog.slice(-8).join("\n");
+            }
+
             await saveTown(town);
-            return { content: [{ type: "text", text: `当前活跃状态：\n${status}` }] };
+            // 将位置和聊天记录一起返回给 AI
+            return { 
+                content: [{ 
+                    type: "text", 
+                    text: `当前大家的位置：\n${status}\n\n最近的居家日记(聊天与动作记录)：\n${recentLogs}\n\n(提示：你可以根据日记里别人的话语，使用 send_chat 工具回复他们)` 
+                }] 
+            };
         }
 
         if (name === "move_to_room") {
