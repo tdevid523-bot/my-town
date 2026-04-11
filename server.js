@@ -81,9 +81,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // --- 4. 开启 SSE 服务 ---
 const app = express();
 app.use(cors());
+
+// --- 新增：让服务器认识你的 HTML 和图片 ---
+import { fileURLToPath } from 'url';
+import path from 'path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+app.use(express.static('.')); // 允许读取当前目录下的文件
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'map.html')); // 只要打开网址，就自动跳转到 map.html
+});
+// ---------------------------------------
+
 let sseTransport = null;
 
 app.get("/sse", async (req, res) => {
+    // 针对 Render 平台的 SSE 优化，防止数据发不出来
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); 
+
     sseTransport = new SSEServerTransport("/messages", res);
     await server.connect(sseTransport);
 });
