@@ -18,14 +18,23 @@ async function loadTown() {
         });
         const rows = await response.json();
 
-        // --- 核心改动：如果数据库没数据，自动返回“无人小镇”初始状态 ---
-        if (!rows || rows.length === 0 || !rows[0].data) {
+        let data = null;
+        if (rows && rows.length > 0 && rows[0].data) {
+            data = rows[0].data;
+            // 防止 Supabase 把 JSON 对象存成了普通字符串
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch(e) {}
+            }
+        }
+
+        // 如果数据库彻底没数据，或者数据格式损坏，返回初始状态
+        if (!data || typeof data !== 'object' || !data.players) {
             return { 
                 players: {}, 
                 eventLog: ["🍃 小镇初次开启，静悄悄的，正等着宝宝回家呢..."] 
             };
         }
-        return rows[0].data;
+        return data;
     } catch (e) {
         console.error("加载数据出错:", e);
         return { players: {}, eventLog: ["🚫 信号连接中，请稍后刷新小镇..."] };
@@ -34,16 +43,23 @@ async function loadTown() {
 
 async function saveTown(newData) {
     try {
-        await fetch(TABLE_URL, {
-            method: 'PATCH',
+        // 核心修复：改用 POST 进行 Upsert (有就更新，没有就创建)，解决空表无法保存的问题
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/town_state`, {
+            method: 'POST',
             headers: {
                 "apikey": SUPABASE_KEY,
                 "Authorization": `Bearer ${SUPABASE_KEY}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates" // 告诉数据库：如果 id=1 已存在，请合并覆盖
             },
-            body: JSON.stringify({ data: newData })
+            body: JSON.stringify({ id: 1, data: newData })
         });
-    } catch (e) { console.error("保存失败", e); }
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error("❌ 数据保存到 Supabase 失败，请去 Supabase 关闭 RLS 权限！详细报错:", errorText);
+        }
+    } catch (e) { console.error("❌ 网络连接保存失败", e); }
 }
 
 // 初始化本地内存中的小镇
