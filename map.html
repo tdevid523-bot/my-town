@@ -288,6 +288,17 @@
         // 3. 渲染逻辑
         function renderPlayers(players) {
             const map = document.getElementById('map');
+            
+            // --- 新增：清理已退出的玩家 ---
+            const allAvatars = document.querySelectorAll('.avatar');
+            allAvatars.forEach(avatar => {
+                const name = avatar.id.replace('char-', '');
+                if (!players[name]) {
+                    avatar.remove(); // 如果数据库里没了，网页上就删掉
+                }
+            });
+
+            // --- 渲染当前在线玩家 ---
             Object.entries(players).forEach(([name, data], index) => {
                 let avatar = document.getElementById(`char-${name}`);
                 if (!avatar) {
@@ -307,7 +318,13 @@
 
         function updateLogs(logs) {
             const logBox = document.getElementById('event-log');
-            // 只取最近的 15 条记录，最新的在下面
+            
+            // --- 核心改动：如果没有日志或没人说话，显示温馨初始提示 ---
+            if (!logs || logs.length === 0) {
+                logBox.innerHTML = '<div style="text-align:center; color:#95a5a6; margin-top:20px; font-style:italic;">🏠 家里空空的，快叫 AI 登录回家吧~</div>';
+                return;
+            }
+
             logBox.innerHTML = logs.slice(-15).map(l => {
                 // 如果包含冒号，说明是聊天，加粗名字
                 if (l.includes('：')) {

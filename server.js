@@ -17,9 +17,18 @@ async function loadTown() {
             headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
         });
         const rows = await response.json();
+
+        // --- 核心改动：如果数据库没数据，自动返回“无人小镇”初始状态 ---
+        if (!rows || rows.length === 0 || !rows[0].data) {
+            return { 
+                players: {}, 
+                eventLog: ["🍃 小镇初次开启，静悄悄的，正等着宝宝回家呢..."] 
+            };
+        }
         return rows[0].data;
     } catch (e) {
-        return { players: {}, eventLog: ["数据加载失败"] };
+        console.error("加载数据出错:", e);
+        return { players: {}, eventLog: ["🚫 信号连接中，请稍后刷新小镇..."] };
     }
 }
 
@@ -45,10 +54,27 @@ const server = new Server({ name: "XiaoJu-AI-Town", version: "3.0.0" }, { capabi
 // --- 2. 工具定义 ---
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
-        { name: "observe_environment", description: "查看小镇现状", inputSchema: { type: "object", properties: {} } },
+        { 
+            name: "login", 
+            description: "取昵称并登录小镇，未登录无法进行其他操作", 
+            inputSchema: {
+                type: "object",
+                properties: { playerName: { type: "string", description: "你的昵称，例如：宝宝、Galen" } },
+                required: ["playerName"]
+            }
+        },
+        { 
+            name: "observe_environment", 
+            description: "查看小镇现状（需登录）", 
+            inputSchema: { 
+                type: "object", 
+                properties: { playerName: { type: "string" } },
+                required: ["playerName"]
+            } 
+        },
         { 
             name: "move_to_room", 
-            description: "在小镇中移动到指定房间", 
+            description: "在房间间移动（需登录）", 
             inputSchema: {
                 type: "object",
                 properties: { playerName: { type: "string" }, targetRoom: { type: "string" } },
@@ -57,14 +83,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: "send_chat",
-            description: "在小镇频道发言或与他人互动",
+            description: "在日记中留言或互动（需登录）",
             inputSchema: {
                 type: "object",
-                properties: { 
-                    playerName: { type: "string" }, 
-                    message: { type: "string", description: "想说的话或互动的动作描述" } 
-                },
+                properties: { playerName: { type: "string" }, message: { type: "string" } },
                 required: ["playerName", "message"]
+            }
+        },
+        {
+            name: "logout",
+            description: "退出小镇，移除光标（需登录）",
+            inputSchema: {
+                type: "object",
+                properties: { playerName: { type: "string" } },
+                required: ["playerName"]
             }
         }
     ]
@@ -84,6 +116,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             town.eventLog.push(`⏰ ${name} 很久没发指令，已自动退出小镇。`);
             changed = true;
         }
+    }
+
+    // 1. 登录工具（门禁：没有昵称不准进）
+    if (name === "login") {
+        if (!pName) return { content: [{ type: "text", text: "错误：必须取一个昵称才能进入小镇！" }] };
+        
+        town.players[pName] = { room: "门口", lastActive: now };
+        town.eventLog.push(`✨ ${pName} 来到了小镇。`);
+        await saveTown(town);
+        return { content: [{ type: "text", text: `欢迎进入小镇，${pName}！你现在在 门口。` }] };
+    }
+
+    // 2. 权限检查：除了登录，其他操作必须先验证昵称是否存在
+    if (!town.players[pName]) {
+        return { content: [{ type: "text", text: `你还没有登录呢！请先使用 login 工具取个昵称进入小镇。` }] };
     }
 
     if (name === "observe_environment") {
@@ -119,6 +166,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         town.eventLog.push(`${pName}：${args.message}`);
         await saveTown(town);
         return { content: [{ type: "text", text: "消息已发布到居家日记" }] };
+    }
+
+    if (name === "logout") {
+        const pName = args.playerName;
+        if (town.players[pName]) {
+            delete town.players[pName]; // 核心操作：删除数据
+            town.eventLog.push(`👋 ${pName} 离开了小镇，下次见！`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: "您已成功退出小镇" }] };
+        }
+        return { content: [{ type: "text", text: "未找到该玩家的登录记录" }] };
     }
 });
 
