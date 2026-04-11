@@ -206,6 +206,31 @@
                 box-sizing: border-box;
             }
         }
+
+        /* --- 新增：玩家交互界面样式 --- */
+        #user-controls {
+            display: flex; gap: 10px; align-items: center; justify-content: center;
+            padding: 15px; background: rgba(0,0,0,0.7); border-radius: 10px;
+            margin-bottom: 20px; border: 2px solid var(--border-primary);
+        }
+        #user-controls input, #interaction-area input {
+            background: #2c3e50; border: 1px solid #DEB887; color: white;
+            padding: 8px 12px; border-radius: 5px; outline: none;
+        }
+        #user-controls button, #interaction-area button {
+            background: #DEB887; border: none; padding: 8px 15px; 
+            border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        #user-controls button:hover, #interaction-area button:hover { background: #ff8c00; transform: scale(1.05); }
+
+        #interaction-area {
+            margin-top: 15px; padding-top: 15px; border-top: 2px dashed rgba(222, 184, 135, 0.3);
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        #map { cursor: crosshair; } /* 地图鼠标变为准星，提示可点击 */
+        
+        /* 登录状态提示 */
+        #login-status { font-size: 12px; color: #ff8c00; margin-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -214,6 +239,39 @@
         <div id="coords-display">当前点击位置: x: 0, y: 0</div>
         <div id="code-snippet" style="margin-top:10px; color:#ff7f50;">"房间名": { x: 0, y: 0 },</div>
     </div>
+
+    <div id="dev-console">
+        <div class="dev-hint">🛠️ 开发者模式：点击地图获取坐标</div>
+        <div id="coords-display">当前点击位置: x: 0, y: 0</div>
+    </div>
+
+    <div id="user-controls" style="max-width: 1200px; margin: 20px auto 0 auto;">
+        <input type="text" id="nickname-input" placeholder="输入你的昵称 (如: 宝宝)">
+        <button onclick="handleLogin()">进入小镇</button>
+        <button onclick="handleLogout()" style="background: #95a5a6;">离开</button>
+        <span id="current-user-display" style="color: #DEB887; margin-left: 15px; font-weight: bold;">[当前未登录]</span>
+    </div>
+
+    <div id="town-container">
+        <div id="map" onclick="handleMapClick(event)"></div>
+        
+        <div id="side-panel">
+            <h2 style="text-align: center; color: #DEB887; font-size: 18px; letter-spacing: 2px;">📜 居家日记</h2>
+            <div id="mcp-status" style="text-align: center; color: #aaa; font-size: 12px; margin-bottom: 15px;">🟢 当前连接 MCP 数: <span id="mcp-count">0</span></div>
+
+            <div id="event-log"></div>
+            
+            <div id="interaction-area">
+                <div id="login-status">提示：登录后点击地图即可移动</div>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="chat-msg" placeholder="说点什么..." style="flex: 1;">
+                    <button onclick="handleChat()">发送</button>
+                </div>
+                <button onclick="handlePickOranges()" style="background: linear-gradient(to bottom, #ffeb3b, #ff8c00); color: #3e2723;">🍊 摘个橘子吃</button>
+            </div>
+        </div>
+    </div>
+
     <div id="town-container">
         <div id="map">
             </div>
@@ -354,6 +412,124 @@
         console.log("🎬 脚本已就绪，正在启动小镇...");
         syncTownState(); // 先跑一次
         setInterval(syncTownState, 3000); // 之后每 3 秒刷新一次
+
+        // --- 4. 玩家交互核心逻辑 ---
+        let myName = localStorage.getItem('town_nickname') || null;
+        if(myName) document.getElementById('current-user-display').innerText = `你好，${myName}！`;
+
+        // 统一的数据推送函数 (从服务器端逻辑搬运)
+        async function pushUpdate(updaterFn) {
+            if (!myName) { alert("宝宝，请先在上方输入昵称登录哦！"); return; }
+            
+            try {
+                // 1. 先拿最新的数据，防止覆盖掉别人的动作
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/town_state?id=eq.1`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const rows = await res.json();
+                let town = rows[0].data;
+
+                // 2. 执行修改逻辑
+                town = updaterFn(town);
+
+                // 3. 存回去
+                await fetch(`${SUPABASE_URL}/rest/v1/town_state`, {
+                    method: 'POST',
+                    headers: {
+                        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"
+                    },
+                    body: JSON.stringify({ id: 1, data: town })
+                });
+                
+                // 立即刷新界面
+                syncTownState();
+            } catch (err) { console.error("推送失败:", err); }
+        }
+
+        function handleLogin() {
+            const input = document.getElementById('nickname-input').value.trim();
+            if (!input) return;
+            myName = input;
+            localStorage.setItem('town_nickname', myName);
+            document.getElementById('current-user-display').innerText = `你好，${myName}！`;
+
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.players[myName] = { room: "门口", lastActive: Date.now() };
+                town.eventLog.push(`[${now}] ✨ ${myName} 进入了小镇`);
+                return town;
+            });
+        }
+
+        function handleLogout() {
+            if (!myName) return;
+            const target = myName;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                delete town.players[target];
+                town.eventLog.push(`[${now}] 👋 ${target} 离开了小镇`);
+                return town;
+            });
+            myName = null;
+            localStorage.removeItem('town_nickname');
+            document.getElementById('current-user-display').innerText = `[当前未登录]`;
+        }
+
+        function handleChat() {
+            const msg = document.getElementById('chat-msg').value.trim();
+            if (!msg) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.players[myName].lastActive = Date.now();
+                town.eventLog.push(`[${now}] ${myName}：${msg}`);
+                return town;
+            });
+            document.getElementById('chat-msg').value = '';
+        }
+
+        function handleMapClick(e) {
+            const map = document.getElementById('map');
+            const rect = map.getBoundingClientRect();
+            // 计算点击位置的百分比坐标
+            const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+            const clickY = ((e.clientY - rect.top) / rect.height) * 100;
+
+            // 寻找离点击位置最近的房间
+            let closestRoom = "门口";
+            let minDistance = 1000;
+
+            Object.entries(roomCoords).forEach(([room, pos]) => {
+                const dist = Math.sqrt(Math.pow(clickX - pos.x, 2) + Math.pow(clickY - pos.y, 2));
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestRoom = room;
+                }
+            });
+
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.players[myName].room = closestRoom;
+                town.players[myName].lastActive = Date.now();
+                town.eventLog.push(`[${now}] ${myName} 移动到了 ${closestRoom}`);
+                return town;
+            });
+        }
+
+        function handlePickOranges() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.orangeTree || town.orangeTree.oranges <= 0) {
+                    alert("哎呀，橘子还没熟呢~");
+                    return town;
+                }
+                let pickCount = Math.floor(Math.random() * 5) + 1;
+                if (pickCount > town.orangeTree.oranges) pickCount = town.orangeTree.oranges;
+                town.orangeTree.oranges -= pickCount;
+                town.eventLog.push(`[${now}] 🍊 ${myName} 兴高采烈地摘下了 ${pickCount} 个大橘子！`);
+                return town;
+            });
+        }
     </script>
 </body>
 </html>
