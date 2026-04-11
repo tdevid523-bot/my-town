@@ -237,12 +237,6 @@
     <div id="dev-console">
         <div class="dev-hint">🛠️ 开发者模式：点击地图获取坐标</div>
         <div id="coords-display">当前点击位置: x: 0, y: 0</div>
-        <div id="code-snippet" style="margin-top:10px; color:#ff7f50;">"房间名": { x: 0, y: 0 },</div>
-    </div>
-
-    <div id="dev-console">
-        <div class="dev-hint">🛠️ 开发者模式：点击地图获取坐标</div>
-        <div id="coords-display">当前点击位置: x: 0, y: 0</div>
     </div>
 
     <div id="user-controls" style="max-width: 1200px; margin: 20px auto 0 auto;">
@@ -267,21 +261,8 @@
                     <input type="text" id="chat-msg" placeholder="说点什么..." style="flex: 1;">
                     <button onclick="handleChat()">发送</button>
                 </div>
-                <button onclick="handlePickOranges()" style="background: linear-gradient(to bottom, #ffeb3b, #ff8c00); color: #3e2723;">🍊 摘个橘子吃</button>
+                <button id="pick-orange-btn" onclick="handlePickOranges()" style="display: none; background: linear-gradient(to bottom, #ffeb3b, #ff8c00); color: #3e2723; margin-top: 10px;">🍊 摘个橘子吃</button>
             </div>
-        </div>
-    </div>
-
-    <div id="town-container">
-        <div id="map">
-            </div>
-        
-        <div id="side-panel">
-            <h2 style="text-align: center; color: #DEB887; font-size: 18px; letter-spacing: 2px;">📜 居家日记</h2>
-            <div id="mcp-status" style="text-align: center; color: #aaa; font-size: 12px; margin-bottom: 15px;">🟢 当前连接 MCP 数: <span id="mcp-count" style="color: #ff8c00; font-weight: bold;">0</span></div>
-
-            <div id="event-log"></div>
-            <p style="font-size: 12px; color: #95a5a6; margin-top: 10px;">提示：请在聊天软件中让 Galen 执行动作，这里会同步更新。</p>
         </div>
     </div>
 
@@ -365,6 +346,17 @@
             const mcpCountSpan = document.getElementById('mcp-count');
             if (mcpCountSpan) {
                 mcpCountSpan.innerText = Object.keys(players).length;
+            }
+
+            // --- 🍊 核心改动：动态显示“摘橘子”按钮 ---
+            const pickBtn = document.getElementById('pick-orange-btn');
+            if (pickBtn) {
+                // 判断条件：你登录了，且你的化身位置是“小洋房花园”
+                if (myName && players[myName] && players[myName].room === "小洋房花园") {
+                    pickBtn.style.display = 'block'; // 显示按钮
+                } else {
+                    pickBtn.style.display = 'none';  // 藏起按钮
+                }
             }
         }
 
