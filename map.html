@@ -261,7 +261,19 @@
                     <input type="text" id="chat-msg" placeholder="说点什么..." style="flex: 1;">
                     <button onclick="handleChat()">发送</button>
                 </div>
-                <button id="pick-orange-btn" onclick="handlePickOranges()" style="display: none; background: linear-gradient(to bottom, #ffeb3b, #ff8c00); color: #3e2723; margin-top: 10px;">🍊 摘个橘子吃</button>
+                <div id="interaction-area">
+                <div id="login-status">提示：登录后点击地图即可移动</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                    <input type="text" id="chat-msg" placeholder="说点什么..." style="flex: 1;">
+                    <button onclick="handleChat()">发送</button>
+                </div>
+                <div id="context-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button id="pick-orange-btn" onclick="handlePickOranges()" style="display: none; background: #ff8c00;">🍊 摘橘子</button>
+                    <button id="water-flower-btn" onclick="handleWater()" style="display: none; background: #3498db;">💧 浇花</button>
+                    <button id="swing-btn" onclick="handleSwing()" style="display: none; background: #9b59b6;">🎡 荡秋千</button>
+                    <button id="fill-fridge-btn" onclick="handleFillFridge()" style="display: none; background: #2ecc71;">🛒 填冰箱</button>
+                    <button id="cook-btn" onclick="handleCook()" style="display: none; background: #e74c3c;">🍳 做饭</button>
+                </div>
             </div>
         </div>
     </div>
@@ -348,16 +360,24 @@
                 mcpCountSpan.innerText = Object.keys(players).length;
             }
 
-            // --- 🍊 核心改动：动态显示“摘橘子”按钮 ---
-            const pickBtn = document.getElementById('pick-orange-btn');
-            if (pickBtn) {
-                // 判断条件：你登录了，且你的化身位置是“小洋房花园”
-                if (myName && players[myName] && players[myName].room === "小洋房花园") {
-                    pickBtn.style.display = 'block'; // 显示按钮
-                } else {
-                    pickBtn.style.display = 'none';  // 藏起按钮
+            // --- 场景感知按钮逻辑 ---
+            const currentRoom = (myName && players[myName]) ? players[myName].room : null;
+            
+            // 定义：按钮ID -> 出现的房间名
+            const roomConfig = {
+                'pick-orange-btn': "小洋房花园",
+                'water-flower-btn': "小洋房花园",
+                'swing-btn': "小洋房花园",
+                'fill-fridge-btn': "吧台厨房",
+                'cook-btn': "吧台厨房"
+            };
+
+            Object.entries(roomConfig).forEach(([btnId, targetRoom]) => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.style.display = (currentRoom === targetRoom) ? 'inline-block' : 'none';
                 }
-            }
+            });
         }
 
         function updateLogs(logs) {
@@ -508,17 +528,38 @@
             });
         }
 
-        function handlePickOranges() {
+        function handleWater() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                if (!town.orangeTree || town.orangeTree.oranges <= 0) {
-                    alert("哎呀，橘子还没熟呢~");
-                    return town;
-                }
-                let pickCount = Math.floor(Math.random() * 5) + 1;
-                if (pickCount > town.orangeTree.oranges) pickCount = town.orangeTree.oranges;
-                town.orangeTree.oranges -= pickCount;
-                town.eventLog.push(`[${now}] 🍊 ${myName} 兴高采烈地摘下了 ${pickCount} 个大橘子！`);
+                town.garden.flowers = { status: "healthy", lastWatered: Date.now() };
+                town.eventLog.push(`[${now}] 💧 ${myName} 给花儿浇了水。`);
+                return town;
+            });
+        }
+
+        function handleSwing() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🎡 ${myName} 在秋千上荡呀荡。`);
+                return town;
+            });
+        }
+
+        function handleFillFridge() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.kitchen.fridge.stock += 5;
+                town.eventLog.push(`[${now}] 🛒 ${myName} 填满了冰箱。`);
+                return town;
+            });
+        }
+
+        function handleCook() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (town.kitchen.fridge.stock <= 0) { alert("冰箱空啦！"); return town; }
+                town.kitchen.fridge.stock -= 1;
+                town.eventLog.push(`[${now}] 🍳 ${myName} 做了美味的大餐！(余量:${town.kitchen.fridge.stock})`);
                 return town;
             });
         }

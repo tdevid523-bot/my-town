@@ -100,6 +100,26 @@ function createMcpServer() {
                 name: "logout",
                 description: "退出小镇，移除光标（需登录）",
                 inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            },
+            {
+                name: "water_flowers",
+                description: "给花园里的花浇水，防止它们枯萎（需在花园）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            },
+            {
+                name: "use_swing",
+                description: "在花园里悠闲地荡秋千（需在花园）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            },
+            {
+                name: "fill_fridge",
+                description: "往冰箱里填满新鲜食材（需在厨房）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            },
+            {
+                name: "cook_meal",
+                description: "使用冰箱里的食材做一顿丰盛的大餐（需在厨房且有食材）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
             }
         ]
     }));
@@ -122,24 +142,56 @@ function createMcpServer() {
         };
 
         // --- 🍊 核心新增：橘子树生长逻辑 ---
-        if (!town.orangeTree) {
-            // 初始化：给树上挂 5 个初始橘子
-            town.orangeTree = { oranges: 5, lastRipenTime: now };
+        // --- 🌿 核心：环境状态初始化与检查 ---
+        if (!town.garden) town.garden = { flowers: { status: "healthy", lastWatered: now } };
+        if (!town.kitchen) town.kitchen = { fridge: { stock: 5 } };
+        if (!town.orangeTree) town.orangeTree = { oranges: 5, lastRipenTime: now };
+
+        // 1. 橘子生长
+        const ripenInterval = 3 * 60 * 60 * 1000;
+        if (now - town.orangeTree.lastRipenTime >= ripenInterval) {
+            const num = Math.floor((now - town.orangeTree.lastRipenTime) / ripenInterval);
+            town.orangeTree.oranges += num;
+            town.orangeTree.lastRipenTime += num * ripenInterval;
+            addLog(`🌿 橘子树又结出了 ${num} 个新橘子。`);
             changed = true;
-        } else {
-            const ripenInterval = 3 * 60 * 60 * 1000; // 3小时 = 10800000 毫秒
-            const timePassed = now - town.orangeTree.lastRipenTime;
-            
-            if (timePassed >= ripenInterval) {
-                // 计算这期间成熟了几个橘子
-                const newOranges = Math.floor(timePassed / ripenInterval);
-                town.orangeTree.oranges += newOranges;
-                // 更新时间，保留零头，确保玩家不吃亏
-                town.orangeTree.lastRipenTime += newOranges * ripenInterval; 
-                addLog(`🌿 经过时间的滋养，花园里的橘子树又悄悄成熟了 ${newOranges} 个新橘子！`);
-            }
         }
 
+        // 2. 鲜花枯萎检查（24小时不浇水就枯萎）
+        if (town.garden.flowers.status === "healthy" && (now - town.garden.flowers.lastWatered > 24 * 60 * 60 * 1000)) {
+            town.garden.flowers.status = "withered";
+            addLog(`🥀 哎呀，花园里的花太久没喝水，已经枯萎了...`);
+            changed = true;
+        }
+        if (name === "water_flowers") {
+            town.garden.flowers = { status: "healthy", lastWatered: now };
+            addLog(`💧 ${pName} 细心地给花儿浇了水，它们看起来精神多了！`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: "花儿喝饱了水，正对着你微笑呢~" }] };
+        }
+
+        if (name === "use_swing") {
+            addLog(`🎡 ${pName} 坐在秋千上悠闲地晃荡着，裙角随风飞扬。`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: "你在秋千上感受到了久违的宁静。" }] };
+        }
+
+        if (name === "fill_fridge") {
+            town.kitchen.fridge.stock += 5;
+            addLog(`🛒 ${pName} 采购了一大堆食材塞进冰箱，现在满满当当的。`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: "冰箱已经填满了，随时可以大显身手！" }] };
+        }
+
+        if (name === "cook_meal") {
+            if (town.kitchen.fridge.stock <= 0) {
+                return { content: [{ type: "text", text: "冰箱里空空如也，先去填满它吧！" }] };
+            }
+            town.kitchen.fridge.stock -= 1;
+            addLog(`🍳 ${pName} 熟练地系上围裙，在厨房里做了一顿香气扑鼻的大餐！(食材剩余: ${town.kitchen.fridge.stock})`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: "热腾腾的饭菜出锅啦，快叫朋友们来吃吧！" }] };
+        }
         // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
             if (data.lastActive && (now - data.lastActive > 3600000)) { 
