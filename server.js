@@ -11,6 +11,7 @@ const TABLE_URL = `${SUPABASE_URL}/rest/v1/town_state?id=eq.1`;
 
 // --- 1. Supabase 同步逻辑 ---
 async function loadTown() {
+    console.error("DEBUG: 当前使用的URL是:", SUPABASE_URL); // 看看它是不是还是模板里的那个
     try {
         const response = await fetch(TABLE_URL, {
             headers: { 
