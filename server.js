@@ -157,6 +157,10 @@ import express from "express";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 
 const app = express();
+
+import cors from 'cors';
+app.use(cors()); // 需要先 npm install cors
+
 let sseTransport = null;
 
 // 1. 创建 SSE 传输通道
