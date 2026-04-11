@@ -130,11 +130,23 @@ function createMcpServer() {
 
         const now = Date.now();
         let changed = false;
+
+        // --- 新增：专门写日记的小助手（带时间戳 + 500条容量限制） ---
+        const addLog = (msg) => {
+            // 强制使用你的时区 (UTC+8) 生成时间，防止服务器在国外导致时间错乱
+            const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
+            town.eventLog.push(`[${timeStr}] ${msg}`);
+            // 如果超过500条，就切掉最前面的，保留最新的500条
+            if (town.eventLog.length > 500) {
+                town.eventLog = town.eventLog.slice(-500);
+            }
+            changed = true;
+        };
+
         for (const [playerName, data] of Object.entries(town.players)) {
             if (data.lastActive && (now - data.lastActive > 3600000)) { 
                 delete town.players[playerName];
-                town.eventLog.push(`⏰ ${playerName} 很久没发指令，已自动退出小镇。`);
-                changed = true;
+                addLog(`⏰ ${playerName} 很久没发指令，已自动退出小镇。`);
             }
         }
         if (changed) await saveTown(town); 
@@ -142,7 +154,7 @@ function createMcpServer() {
         if (name === "login") {
             if (!pName) return { content: [{ type: "text", text: "错误：必须取一个昵称才能进入小镇！" }] };
             town.players[pName] = { room: "门口", lastActive: now };
-            town.eventLog.push(`✨ ${pName} 来到了小镇。`);
+            addLog(`✨ ${pName} 来到了小镇。`);
             await saveTown(town);
             return { content: [{ type: "text", text: `欢迎进入小镇，${pName}！你现在在 门口。` }] };
         }
@@ -157,15 +169,13 @@ function createMcpServer() {
             town.players[pName].lastActive = now; 
             const status = Object.entries(town.players).map(([p, d]) => `${p} 在 ${d.room}`).join("\n");
             
-            // --- 核心修复：给 AI 加上“耳朵”，把最近的聊天和动态也发给它 ---
             let recentLogs = "日记里空空的，暂时没有人说话。";
             if (town.eventLog && town.eventLog.length > 0) {
-                // 提取最近的 8 条记录发给 AI，让它知道刚刚发生了什么
-                recentLogs = town.eventLog.slice(-8).join("\n");
+                // 给 AI 读最近的 15 条日记就够了，免得它看花眼
+                recentLogs = town.eventLog.slice(-15).join("\n");
             }
 
             await saveTown(town);
-            // 将位置和聊天记录一起返回给 AI
             return { 
                 content: [{ 
                     type: "text", 
@@ -178,27 +188,27 @@ function createMcpServer() {
             const oldRoom = town.players[pName].room;
             town.players[pName].room = args.targetRoom;
             town.players[pName].lastActive = now; 
-            town.eventLog.push(`${pName} 移动到了 ${args.targetRoom}`);
+            addLog(`${pName} 移动到了 ${args.targetRoom}`);
             await saveTown(town); 
             return { content: [{ type: "text", text: `成功移动！当前位置：${args.targetRoom}` }] };
         }
 
         if (name === "send_chat") {
             town.players[pName].lastActive = now;
-            town.eventLog.push(`${pName}：${args.message}`);
+            addLog(`${pName}：${args.message}`);
             await saveTown(town);
             return { content: [{ type: "text", text: "消息已发布到居家日记" }] };
         }
 
         if (name === "logout") {
             delete town.players[pName]; 
-            town.eventLog.push(`👋 ${pName} 离开了小镇，下次见！`);
+            addLog(`👋 ${pName} 离开了小镇，下次见！`);
             await saveTown(town);
             return { content: [{ type: "text", text: "您已成功退出小镇" }] };
         }
     });
 
-    return server; // 工厂流水线最后：返回造好的新大脑
+    return server; 
 }
 
 // --- 4. 开启 SSE 服务 ---

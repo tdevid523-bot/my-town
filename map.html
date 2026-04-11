@@ -334,22 +334,41 @@
         function updateLogs(logs) {
             const logBox = document.getElementById('event-log');
             
-            // --- 核心改动：如果没有日志或没人说话，显示温馨初始提示 ---
             if (!logs || logs.length === 0) {
                 logBox.innerHTML = '<div style="text-align:center; color:#95a5a6; margin-top:20px; font-style:italic;">🏠 家里空空的，快叫 AI 登录回家吧~</div>';
                 return;
             }
 
-            logBox.innerHTML = logs.slice(-15).map(l => {
-                // 如果包含冒号，说明是聊天，加粗名字
-                if (l.includes('：')) {
-                    const [name, msg] = l.split('：');
-                    return `<div class="log-entry chat-style"><b style="color:#FFFACD">${name}</b>: ${msg}</div>`;
+            // --- 滚动体验优化：记录刷新前，用户是不是正在看最底下的最新消息 ---
+            // 如果差距小于 50 像素，说明在最底部
+            const isAtBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 50;
+
+            // 移除 slice(-15)，直接渲染传入的所有日志（后端已限制最大500条）
+            logBox.innerHTML = logs.map(l => {
+                let text = l;
+                let timeSpan = "";
+                
+                // 用正则提取后端发来的时间戳，比如 "[14:30] "
+                const timeMatch = l.match(/^\[(\d{2}:\d{2})\]\s(.*)/);
+                if (timeMatch) {
+                    timeSpan = `<span style="color: #778da9; font-size: 11px; margin-right: 6px; font-family: monospace;">[${timeMatch[1]}]</span>`;
+                    text = timeMatch[2]; // 去掉时间戳剩下的正文
                 }
-                return `<div class="log-entry">${l}</div>`;
+
+                // 判断是否是聊天（找中文冒号）
+                if (text.includes('：')) {
+                    const [name, msg] = text.split('：');
+                    return `<div class="log-entry chat-style">${timeSpan}<b style="color:#FFFACD">${name}</b>: ${msg}</div>`;
+                }
+                return `<div class="log-entry">${timeSpan}${text}</div>`;
             }).join('');
-            // 自动滚动到底部
-            logBox.scrollTop = logBox.scrollHeight;
+            
+            // --- 智能滚动 ---
+            // 只有当用户原本就在最下面时，新消息来了才自动滚到底。
+            // 这样当宝宝往上翻看历史日记时，就不会被系统 3 秒一次的刷新强行拽下去了！
+            if (isAtBottom) {
+                logBox.scrollTop = logBox.scrollHeight;
+            }
         }
 
         // --- 立即启动 ---
