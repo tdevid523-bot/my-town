@@ -62,48 +62,47 @@
             position: relative; padding: 10px; display: flex; flex-wrap: wrap; gap: 5px;
         }
 
-        /* 玩家化身：缩小至 32px */
+        /* 玩家化身：极致迷你版 */
         .avatar {
             position: absolute; 
-            width: 10px; 
-            height: 10px; 
+            width: 3px;   /* 核心：圆点从 10px 缩小到 6px */
+            height: 3px;  /* 核心：圆点从 10px 缩小到 6px */
             border-radius: 50%;
             display: flex; 
             justify-content: center; 
             align-items: center;
             transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
             z-index: 100; 
-            font-size: 14px; 
-            color: white; 
-            font-weight: bold;
-            border: 2px solid white; /* 增加白色描边，让圆点更突出 */
+            border: 1.5px solid white; /* 描边稍微变细一点，显得精致 */
         }
 
         .name-tag { 
             position: absolute; 
-            bottom: -22px; 
-            font-size: 10px; 
+            bottom: -18px; /* 名字牌距离小圆点更近一些 */
+            font-size: 9px; /* 字体改小 */
             background: rgba(0,0,0,0.6); 
-            padding: 1px 6px; 
-            border-radius: 8px; 
+            padding: 2px 4px; 
+            border-radius: 4px; 
             white-space: nowrap; 
             color: white; 
+            pointer-events: none; /* 防止名字牌挡住地图导致点不动 */
         }
 
-        /* 倒三角形长箭头：随圆点缩小同步调整 */
+        /* 倒三角形长箭头：迷你版 */
         .avatar::before {
             content: '';
             position: absolute;
-            top: -55px; /* 距离圆点更近一些 */
+            top: -28px; /* 箭头整体往下压，贴近迷你小圆点 */
             left: 50%;
             transform: translateX(-50%);
-            width: 12px; 
-            height: 45px; 
+            width: 8px;   /* 箭头变窄 */
+            height: 10px; /* 箭头变短 */
             background: currentColor;
             clip-path: polygon(20% 0%, 80% 0%, 80% 65%, 100% 65%, 50% 100%, 0% 65%, 20% 65%);
-            filter: drop-shadow(0 3px 5px rgba(0,0,0,0.3));
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
             animation: arrowBounce 0.8s infinite alternate;
+            pointer-events: none; /* 防止箭头挡住鼠标点击 */
         }
 
         /* 颜色应用 */
@@ -112,7 +111,7 @@
 
         @keyframes arrowBounce {
             from { transform: translateX(-50%) translateY(0); }
-            to { transform: translateX(-50%) translateY(-8px); }
+            to { transform: translateX(-50%) translateY(-4px); } /* 弹跳幅度改小，配合小箭头显得不那么鬼畜 */
         }
 
         /* 右侧日志 */
@@ -342,7 +341,7 @@
                     map.appendChild(avatar);
                 }
                 const basePos = roomCoords[data.room] || roomCoords["门口"];
-                const offset = index * 3;
+                const offset = index * 0.8;
                 avatar.style.left = (basePos.x + offset) + "%";
                 avatar.style.top = (basePos.y + offset) + "%";
                 avatar.style.background = name === '小橘' ? '#ff8c00' : '#3498db';
