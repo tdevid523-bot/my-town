@@ -262,10 +262,14 @@
                 </div>
                 <div id="context-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     <button id="pick-orange-btn" onclick="handlePickOranges()" style="display: none; background: #ff8c00;">🍊 摘橘子</button>
+                    <button id="eat-orange-btn" onclick="handleEatOrange()" style="display: none; background: #f39c12;">😋 吃橘子</button>
+                    <button id="store-orange-btn" onclick="handleStoreOrange()" style="display: none; background: #2ecc71;">🧊 橘子放冰箱</button>
+                    <button id="gift-orange-btn" onclick="handleGiftOrange()" style="display: none; background: #e67e22;">🎁 送橘子</button>
                     <button id="water-flower-btn" onclick="handleWater()" style="display: none; background: #3498db;">💧 浇花</button>
                     <button id="swing-btn" onclick="handleSwing()" style="display: none; background: #9b59b6;">🎡 荡秋千</button>
                     <button id="fill-fridge-btn" onclick="handleFillFridge()" style="display: none; background: #2ecc71;">🛒 填冰箱</button>
-                    <button id="cook-btn" onclick="handleCook()" style="display: none; background: #e74c3c;">🍳 做饭</button>
+                    <button id="cook-btn" onclick="handleCook()" style="display: none; background: #e74c3c;">🍳 自定义做饭</button>
+                    <button id="eat-dish-btn" onclick="handleEatDish()" style="display: none; background: #d35400;">🍽️ 享用餐厅美食</button>
                 </div>
             </div>
         </div>
@@ -359,10 +363,14 @@
             // 定义：按钮ID -> 出现的房间名
             const roomConfig = {
                 'pick-orange-btn': "小洋房花园",
+                'eat-orange-btn': "小洋房花园", 
+                'store-orange-btn': "吧台厨房",
+                'gift-orange-btn': "客厅", 
                 'water-flower-btn': "小洋房花园",
                 'swing-btn': "小洋房花园",
                 'fill-fridge-btn': "吧台厨房",
-                'cook-btn': "吧台厨房"
+                'cook-btn': "吧台厨房",
+                'eat-dish-btn': "温馨餐厅"
             };
 
             Object.entries(roomConfig).forEach(([btnId, targetRoom]) => {
@@ -455,14 +463,27 @@
         function handleLogin() {
             const input = document.getElementById('nickname-input').value.trim();
             if (!input) return;
+            
+            // 【新增】进入前要求输入自定义食材
+            const ingredientsInput = prompt("宝宝回家啦！口袋里装了哪3样想带回家的专属食材呢？\n（请用逗号或空格隔开，例如：排骨, 豆腐, 青菜）", "土豆, 牛肉, 番茄");
+            if (!ingredientsInput) return; // 如果点击取消，就不进行登录
+            
+            // 将输入的食材切分并最多保留3个
+            const items = ingredientsInput.split(/[,，\s]+/).filter(i => i.trim() !== "").slice(0, 3);
+            
             myName = input;
             localStorage.setItem('town_nickname', myName);
             document.getElementById('current-user-display').innerText = `你好，${myName}！`;
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                town.players[myName] = { room: "门口", lastActive: Date.now() };
-                town.eventLog.push(`[${now}] ✨ ${myName} 进入了小镇`);
+                // 【新增】给玩家创建背包(inventory)，装入橘子和自定义食材
+                town.players[myName] = { 
+                    room: "门口", 
+                    lastActive: Date.now(),
+                    inventory: { oranges: 0, ingredients: items }
+                };
+                town.eventLog.push(`[${now}] ✨ ${myName} 带着 [${items.join(', ')}] 进入了小镇`);
                 return town;
             });
         }
@@ -496,11 +517,9 @@
         function handleMapClick(e) {
             const map = document.getElementById('map');
             const rect = map.getBoundingClientRect();
-            // 计算点击位置的百分比坐标
             const clickX = ((e.clientX - rect.left) / rect.width) * 100;
             const clickY = ((e.clientY - rect.top) / rect.height) * 100;
 
-            // 寻找离点击位置最近的房间
             let closestRoom = "门口";
             let minDistance = 1000;
 
@@ -521,6 +540,73 @@
             });
         }
 
+        // --- 🍊 橘子系列互动逻辑 ---
+        function handlePickOranges() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.orangeTree) town.orangeTree = { oranges: 5, lastRipenTime: Date.now() }; 
+                if (town.orangeTree.oranges <= 0) { alert("树上没有橘子啦！等长出来再摘哦~"); return town; }
+                
+                town.orangeTree.oranges -= 1;
+                // 确保背包存在
+                if (!town.players[myName].inventory) town.players[myName].inventory = { oranges: 0, ingredients: [] };
+                town.players[myName].inventory.oranges += 1;
+                
+                town.eventLog.push(`[${now}] 🍊 ${myName} 摘了 1 个大橘子揣在口袋里。`);
+                return town;
+            });
+        }
+
+        function handleEatOrange() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.players[myName].inventory || town.players[myName].inventory.oranges <= 0) {
+                    alert("口袋里没有橘子哦，去花园摘一点吧！"); return town;
+                }
+                town.players[myName].inventory.oranges -= 1;
+                town.eventLog.push(`[${now}] 😋 ${myName} 剥开一个橘子吃掉了，满嘴果香，甜到心里啦！`);
+                return town;
+            });
+        }
+
+        function handleStoreOrange() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.players[myName].inventory || town.players[myName].inventory.oranges <= 0) {
+                    alert("口袋里没有橘子啦！"); return town;
+                }
+                town.players[myName].inventory.oranges -= 1;
+                if (!town.kitchen.fridge.oranges) town.kitchen.fridge.oranges = 0;
+                town.kitchen.fridge.oranges += 1; // 存入冰箱的橘子库存
+                town.eventLog.push(`[${now}] 🧊 ${myName} 把 1 个橘子放进冰箱冷藏了。(冰箱共有 ${town.kitchen.fridge.oranges} 个冰橘子)`);
+                return town;
+            });
+        }
+
+        function handleGiftOrange() {
+            const target = prompt("想把橘子送给谁？(请输入在线的玩家昵称，比如：Galen)", "");
+            if (!target) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.players[myName].inventory || town.players[myName].inventory.oranges <= 0) {
+                    alert("口袋里没有橘子啦！"); return town;
+                }
+                if (!town.players[target]) {
+                    alert(`小镇里现在没有叫 ${target} 的人在线哦~`); return town;
+                }
+                if (target === myName) {
+                    alert("宝宝，橘子不能送给自己啦，直接吃掉吧！"); return town;
+                }
+                
+                town.players[myName].inventory.oranges -= 1;
+                if (!town.players[target].inventory) town.players[target].inventory = { oranges: 0, ingredients: [] };
+                town.players[target].inventory.oranges += 1; // 给对方加上
+                town.eventLog.push(`[${now}] 🎁 ${myName} 脸红红地递给 ${target} 一个饱满的大橘子！`);
+                return town;
+            });
+        }
+
+        // --- 💧 花园日常 ---
         function handleWater() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
@@ -538,11 +624,12 @@
             });
         }
 
+        // --- 🍳 厨房与餐厅逻辑 ---
         function handleFillFridge() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 town.kitchen.fridge.stock += 5;
-                town.eventLog.push(`[${now}] 🛒 ${myName} 填满了冰箱。`);
+                town.eventLog.push(`[${now}] 🛒 ${myName} 填满了冰箱的基础食材。`);
                 return town;
             });
         }
@@ -550,9 +637,57 @@
         function handleCook() {
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                if (town.kitchen.fridge.stock <= 0) { alert("冰箱空啦！"); return town; }
-                town.kitchen.fridge.stock -= 1;
-                town.eventLog.push(`[${now}] 🍳 ${myName} 做了美味的大餐！(余量:${town.kitchen.fridge.stock})`);
+                const myInv = town.players[myName].inventory || { oranges: 0, ingredients: [] };
+                
+                if (myInv.ingredients.length === 0 && town.kitchen.fridge.stock <= 0) {
+                    alert("口袋里没有自定义食材，冰箱的基础食材也空啦！无法做饭~"); return town;
+                }
+
+                let usedItemsStr = "";
+                if (myInv.ingredients.length > 0) {
+                    usedItemsStr = myInv.ingredients.join('、');
+                    myInv.ingredients = []; // 消耗身上带的自定义食材
+                } else {
+                    town.kitchen.fridge.stock -= 1;
+                    usedItemsStr = "普通食材";
+                }
+
+                const dishName = prompt(`你正在使用 [${usedItemsStr}] 做饭。\n你想做成什么菜？(自定义菜名)：`, "爱心糖醋排骨");
+                if (!dishName) return town; // 取消做饭
+
+                // 将做好的菜存入餐厅的盘子里
+                if (!town.restaurant) town.restaurant = { dishes: [] };
+                town.restaurant.dishes.push({ name: dishName, chef: myName });
+
+                town.eventLog.push(`[${now}] 🍳 ${myName} 在厨房大显身手，用 [${usedItemsStr}] 制作了一道热气腾腾的【${dishName}】！(已端到温馨餐厅)`);
+                return town;
+            });
+        }
+
+        function handleEatDish() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.restaurant || !town.restaurant.dishes || town.restaurant.dishes.length === 0) {
+                    alert("餐厅桌子上空空的，没有菜哦，快去厨房做点吧！"); return town;
+                }
+                
+                // 列出所有菜让玩家选
+                let msg = "餐桌上有以下美食，输入序号选择吃哪一道：\n";
+                town.restaurant.dishes.forEach((d, i) => {
+                    msg += `${i+1}. ${d.name} (大厨: ${d.chef})\n`;
+                });
+                
+                const choice = prompt(msg, "1");
+                if (!choice) return town;
+                
+                const idx = parseInt(choice) - 1;
+                if (isNaN(idx) || idx < 0 || idx >= town.restaurant.dishes.length) {
+                    alert("桌上没有这道菜哦~"); return town;
+                }
+
+                // 吃掉这道菜并从餐厅移除
+                const eatenDish = town.restaurant.dishes.splice(idx, 1)[0]; 
+                town.eventLog.push(`[${now}] 🍽️ ${myName} 在温馨餐厅享用了【${eatenDish.name}】，好吃得跺脚脚！`);
                 return town;
             });
         }
