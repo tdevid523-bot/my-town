@@ -271,6 +271,8 @@
                     <button id="cook-btn" onclick="handleCook()" style="display: none; background: #e74c3c;">🍳 自定义做饭</button>
                     <button id="eat-dish-btn" onclick="handleEatDish()" style="display: none; background: #d35400;">🍽️ 享用餐厅美食</button>
                     <button id="take-med-btn" onclick="handleTakeMedicine()" style="display: none; background: #8e44ad;">💊 找药吃</button>
+                    <button id="put-clothes-btn" onclick="handlePutClothes()" style="display: none; background: #f06292;">👗 添置新衣</button>
+                    <button id="check-closet-btn" onclick="handleCheckCloset()" style="display: none; background: #ba68c8;">🧥 翻看衣柜</button>
                 </div>
             </div>
         </div>
@@ -372,7 +374,9 @@
                 'fill-fridge-btn': "吧台厨房",
                 'cook-btn': "吧台厨房",
                 'eat-dish-btn': "温馨餐厅",
-                'take-med-btn': "吧台厨房"
+                'take-med-btn': "吧台厨房",
+                'put-clothes-btn': "衣帽间",
+                'check-closet-btn': "衣帽间"
             };
 
             Object.entries(roomConfig).forEach(([btnId, targetRoom]) => {
@@ -380,6 +384,48 @@
                 if (btn) {
                     btn.style.display = (currentRoom === targetRoom) ? 'inline-block' : 'none';
                 }
+            });
+        }
+
+        // --- 👗 衣帽间互动逻辑 ---
+        function handlePutClothes() {
+            const owner = prompt("这件漂亮衣服是谁的？", "小橘宝宝");
+            if (!owner) return;
+            const style = prompt("这件衣服是什么款式的？(比如：可爱连体衣、优雅西装)", "考拉连体睡衣");
+            const desc = prompt("它长什么样子呀？(颜色、材质、细节)", "软糯糯的灰色毛绒材质，背后有小尾巴");
+
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.cloakroom) town.cloakroom = { wardrobe: [] };
+                
+                town.cloakroom.wardrobe.push({
+                    owner: owner,
+                    style: style,
+                    desc: desc,
+                    addedBy: myName
+                });
+
+                town.eventLog.push(`[${now}] 👗 ${myName} 往衣帽间里塞进了一件 ${owner} 的【${style}】。`);
+                return town;
+            });
+        }
+
+        function handleCheckCloset() {
+            pushUpdate(town => {
+                if (!town.cloakroom || !town.cloakroom.wardrobe || town.cloakroom.wardrobe.length === 0) {
+                    alert("衣柜里空荡荡的，快去买点漂亮的衣服回来吧！");
+                    return town;
+                }
+
+                let list = "--- 👗 奢华衣帽间藏品 ---\n";
+                town.cloakroom.wardrobe.forEach((item, i) => {
+                    list += `${i + 1}. 【${item.owner}】的${item.style}\n   外观：${item.desc}\n`;
+                });
+                
+                alert(list);
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🧥 ${myName} 正在衣帽间里挑选今天要穿的衣服。`);
+                return town;
             });
         }
 

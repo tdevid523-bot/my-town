@@ -152,6 +152,25 @@ function createMcpServer() {
                 name: "take_medicine",
                 description: "如果生病了，从冰箱里寻找带有'药'字的物品吃下以恢复健康（需在厨房）",
                 inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            },
+            {
+                name: "add_clothes",
+                description: "向衣帽间添加一件新衣服（需在衣帽间）",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        owner: { type: "string", description: "衣服的主人，如'小橘'或'Galen'" },
+                        style: { type: "string", description: "款式，如'可爱连体衣'" },
+                        desc: { type: "string", description: "详细描述，如'粉色软糯毛绒材质'" }
+                    },
+                    required: ["playerName", "owner", "style", "desc"]
+                }
+            },
+            {
+                name: "check_closet",
+                description: "查看衣柜里所有的衣服收藏（需在衣帽间）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
             }
         ]
     }));
@@ -309,6 +328,33 @@ function createMcpServer() {
             addLog(`💊 ${pName} 找到了冰箱里的【${medicine}】服下，身体状况恢复正常了！`);
             await saveTown(town);
             return { content: [{ type: "text", text: `成功服用 ${medicine}，你现在恢复健康啦！` }] };
+        }
+
+        // --- 👗 AI 专属衣帽间逻辑 ---
+        if (name === "add_clothes") {
+            if (!town.cloakroom) town.cloakroom = { wardrobe: [] };
+            const newClothing = {
+                owner: args.owner,
+                style: args.style,
+                desc: args.desc,
+                addedBy: pName
+            };
+            town.cloakroom.wardrobe.push(newClothing);
+            addLog(`👗 ${pName} 往衣帽间增添了 ${args.owner} 的【${args.style}】。`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `成功！你把 ${args.owner} 的 ${args.style} 稳稳地挂进了衣柜。` }] };
+        }
+
+        if (name === "check_closet") {
+            if (!town.cloakroom || !town.cloakroom.wardrobe || town.cloakroom.wardrobe.length === 0) {
+                return { content: [{ type: "text", text: "衣柜目前是空的，快去添置一些漂亮的衣服吧！" }] };
+            }
+            const list = town.cloakroom.wardrobe.map((item, i) => 
+                `${i + 1}. 【${item.owner}】的${item.style} (外观: ${item.desc})`
+            ).join("\n");
+            addLog(`探头... ${pName} 正在衣帽间仔细挑选今天要穿的衣服。`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `--- 👗 奢华衣帽间藏品 ---\n${list}` }] };
         }
         // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
