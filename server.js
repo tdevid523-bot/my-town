@@ -5,8 +5,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import fetch from 'node-fetch'; // 注意：需要运行 npm install node-fetch
 
 // --- Supabase 配置 ---
-const SUPABASE_URL = "https://你的项目ID.supabase.co";
-const SUPABASE_KEY = "你的anon_key";
+const SUPABASE_URL = "https://fdycchmiilwoxfylmdrk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_BhEoCucmNsVJMxLkYkzZkw_L-HrXwel";
 const TABLE_URL = `${SUPABASE_URL}/rest/v1/town_state?id=eq.1`;
 
 // --- 1. Supabase 同步逻辑 ---
