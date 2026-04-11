@@ -210,14 +210,10 @@
     </div>
     <div id="town-container">
         <div id="map">
-            
-            
-            <div id="xiaoju" class="avatar" style="background: #ff7f50; position: absolute; left: 50.00%; top: 48.00%;"><div class="name-tag">小橘</div></div>
-            <div id="galen" class="avatar" style="background: #3498db; position: absolute; left: 50.00%; top: 48.00%;"><div class="name-tag">Galen</div></div>
-        </div>
+            </div>
         
         <div id="side-panel">
-            <h2 style="text-align: center; color: #DEB887; font-size: 18px; letter-spacing: 2px;">📜 冒险志</h2>
+            <h2 style="text-align: center; color: #DEB887; font-size: 18px; letter-spacing: 2px;">📜 居家日记</h2>
             
             <div class="status-container">
                 <div class="char-card">
@@ -311,7 +307,17 @@
 
         function updateLogs(logs) {
             const logBox = document.getElementById('event-log');
-            logBox.innerHTML = logs.slice(-10).reverse().map(l => `<div class="log-entry">${l}</div>`).join('');
+            // 只取最近的 15 条记录，最新的在下面
+            logBox.innerHTML = logs.slice(-15).map(l => {
+                // 如果包含冒号，说明是聊天，加粗名字
+                if (l.includes('：')) {
+                    const [name, msg] = l.split('：');
+                    return `<div class="log-entry chat-style"><b style="color:#FFFACD">${name}</b>: ${msg}</div>`;
+                }
+                return `<div class="log-entry">${l}</div>`;
+            }).join('');
+            // 自动滚动到底部
+            logBox.scrollTop = logBox.scrollHeight;
         }
 
         // --- 立即启动 ---

@@ -48,11 +48,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         { name: "observe_environment", description: "查看小镇现状", inputSchema: { type: "object", properties: {} } },
         { 
             name: "move_to_room", 
-            description: "移动位置", 
+            description: "在小镇中移动到指定房间", 
             inputSchema: {
                 type: "object",
                 properties: { playerName: { type: "string" }, targetRoom: { type: "string" } },
                 required: ["playerName", "targetRoom"]
+            }
+        },
+        {
+            name: "send_chat",
+            description: "在小镇频道发言或与他人互动",
+            inputSchema: {
+                type: "object",
+                properties: { 
+                    playerName: { type: "string" }, 
+                    message: { type: "string", description: "想说的话或互动的动作描述" } 
+                },
+                required: ["playerName", "message"]
             }
         }
     ]
@@ -63,18 +75,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     town = await loadTown(); // 动作前先刷新数据
 
+    // --- 自动清理逻辑：检查一小时没动静的角色 ---
+    const now = Date.now();
+    let changed = false;
+    for (const [name, data] of Object.entries(town.players)) {
+        if (data.lastActive && (now - data.lastActive > 3600000)) { // 3600000毫秒 = 1小时
+            delete town.players[name];
+            town.eventLog.push(`⏰ ${name} 很久没发指令，已自动退出小镇。`);
+            changed = true;
+        }
+    }
+
     if (name === "observe_environment") {
+        // AI 观察环境时，视作“登录/活跃”
+        const pName = args.playerName || "未知旅客"; 
+        if (!town.players[pName]) town.players[pName] = { room: "门口" };
+        town.players[pName].lastActive = now; // 刷新活跃时间
+        
         const status = Object.entries(town.players).map(([p, d]) => `${p} 在 ${d.room}`).join("\n");
-        return { content: [{ type: "text", text: `当前状态：\n${status}` }] };
+        await saveTown(town);
+        return { content: [{ type: "text", text: `当前活跃状态：\n${status}` }] };
     }
 
     if (name === "move_to_room") {
-        if (!town.players[args.playerName]) town.players[args.playerName] = { room: "" };
-        const oldRoom = town.players[args.playerName].room;
-        town.players[args.playerName].room = args.targetRoom;
-        town.eventLog.push(`${args.playerName} 从 ${oldRoom} 来到了 ${args.targetRoom}`);
-        await saveTown(town); // 动作后立刻存入 Supabase
-        return { content: [{ type: "text", text: `成功移动到 ${args.targetRoom}` }] };
+        const pName = args.playerName;
+        if (!town.players[pName]) town.players[pName] = { room: "门口" };
+        
+        const oldRoom = town.players[pName].room;
+        town.players[pName].room = args.targetRoom;
+        town.players[pName].lastActive = now; // 记录这次发指令的时间
+        
+        town.eventLog.push(`${pName} 移动到了 ${args.targetRoom}`);
+        await saveTown(town); 
+        return { content: [{ type: "text", text: `成功移动！当前位置：${args.targetRoom}` }] };
+    }
+
+    if (name === "send_chat") {
+        const pName = args.playerName;
+        if (!town.players[pName]) town.players[pName] = { room: "门口" };
+        town.players[pName].lastActive = Date.now();
+        
+        // 将聊天内容存入日记，格式为 "姓名: 内容"
+        town.eventLog.push(`${pName}：${args.message}`);
+        await saveTown(town);
+        return { content: [{ type: "text", text: "消息已发布到居家日记" }] };
     }
 });
 
