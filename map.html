@@ -200,6 +200,26 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
         .dev-hint { color: #aaa; margin-bottom: 5px; }
+
+        /* --- 新增：手机端自适应布局 --- */
+        @media (max-width: 768px) {
+            #town-container {
+                flex-direction: column; /* 核心：强制改为上下堆叠排列 */
+                padding: 15px; /* 手机屏幕小，把外框的留白稍微收缩一下 */
+                gap: 15px;
+            }
+            
+            #map {
+                min-height: 400px; /* 手机端地图稍微矮一点，留空间给下面的日记 */
+                width: 100%;
+            }
+
+            #side-panel {
+                flex: none; /* 解除原本的伸缩比例限制 */
+                width: 100%; /* 撑满底部宽度 */
+                box-sizing: border-box;
+            }
+        }
     </style>
 </head>
 <body>
