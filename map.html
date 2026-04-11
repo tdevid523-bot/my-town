@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>小橘的 AI Town</title>
     <style>
         :root {
@@ -201,22 +202,28 @@
         }
         .dev-hint { color: #aaa; margin-bottom: 5px; }
 
-        /* --- 新增：手机端自适应布局 --- */
-        @media (max-width: 768px) {
+        /* --- 移动端自适应补丁 --- */
+        @media screen and (max-width: 1024px) {
             #town-container {
-                flex-direction: column; /* 核心：强制改为上下堆叠排列 */
-                padding: 15px; /* 手机屏幕小，把外框的留白稍微收缩一下 */
-                gap: 15px;
+                flex-direction: column !important; /* 使用 !important 确保强制切换 */
+                padding: 10px;
+                gap: 10px;
+                width: 100vw;
+                height: auto;
             }
             
             #map {
-                min-height: 400px; /* 手机端地图稍微矮一点，留空间给下面的日记 */
-                width: 100%;
+                width: 100% !important;
+                min-height: 45vh; /* 占据屏幕高度的 45% */
+                flex: none;
             }
 
             #side-panel {
-                flex: none; /* 解除原本的伸缩比例限制 */
-                width: 100%; /* 撑满底部宽度 */
+                width: 100% !important;
+                height: 50vh; /* 占据屏幕高度的 50% */
+                flex: none;
+                border-left: none;
+                border-top: 4px solid #DEB887; /* 左右变上下后，边框也从左侧移到上方 */
                 box-sizing: border-box;
             }
         }
