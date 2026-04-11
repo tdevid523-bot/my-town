@@ -74,47 +74,32 @@ function createMcpServer() {
             { 
                 name: "login", 
                 description: "取昵称并登录小镇，未登录无法进行其他操作", 
-                inputSchema: {
-                    type: "object",
-                    properties: { playerName: { type: "string", description: "你的昵称，例如：宝宝、Galen" } },
-                    required: ["playerName"]
-                }
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
             },
             { 
                 name: "observe_environment", 
-                description: "查看小镇现状（需登录）", 
-                inputSchema: { 
-                    type: "object", 
-                    properties: { playerName: { type: "string" } },
-                    required: ["playerName"]
-                } 
+                description: "查看小镇现状与橘子树状态（需登录）", 
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] } 
             },
             { 
                 name: "move_to_room", 
                 description: "在房间间移动（需登录）", 
-                inputSchema: {
-                    type: "object",
-                    properties: { playerName: { type: "string" }, targetRoom: { type: "string" } },
-                    required: ["playerName", "targetRoom"]
-                }
+                inputSchema: { type: "object", properties: { playerName: { type: "string" }, targetRoom: { type: "string" } }, required: ["playerName", "targetRoom"] }
             },
             {
                 name: "send_chat",
                 description: "在日记中留言或互动（需登录）",
-                inputSchema: {
-                    type: "object",
-                    properties: { playerName: { type: "string" }, message: { type: "string" } },
-                    required: ["playerName", "message"]
-                }
+                inputSchema: { type: "object", properties: { playerName: { type: "string" }, message: { type: "string" } }, required: ["playerName", "message"] }
+            },
+            {
+                name: "pick_oranges",
+                description: "去花园里摘取橘子，每次能随机摘1到5个解馋（需登录）",
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
             },
             {
                 name: "logout",
                 description: "退出小镇，移除光标（需登录）",
-                inputSchema: {
-                    type: "object",
-                    properties: { playerName: { type: "string" } },
-                    required: ["playerName"]
-                }
+                inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
             }
         ]
     }));
@@ -124,25 +109,38 @@ function createMcpServer() {
         town = await loadTown(); 
 
         let pName = args?.playerName;
-        if (name === "observe_environment" && !pName) {
-            pName = "未知旅客"; 
-        }
+        if (name === "observe_environment" && !pName) pName = "未知旅客"; 
 
         const now = Date.now();
         let changed = false;
 
-        // --- 新增：专门写日记的小助手（带时间戳 + 500条容量限制） ---
         const addLog = (msg) => {
-            // 强制使用你的时区 (UTC+8) 生成时间，防止服务器在国外导致时间错乱
             const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
             town.eventLog.push(`[${timeStr}] ${msg}`);
-            // 如果超过500条，就切掉最前面的，保留最新的500条
-            if (town.eventLog.length > 500) {
-                town.eventLog = town.eventLog.slice(-500);
-            }
+            if (town.eventLog.length > 500) town.eventLog = town.eventLog.slice(-500);
             changed = true;
         };
 
+        // --- 🍊 核心新增：橘子树生长逻辑 ---
+        if (!town.orangeTree) {
+            // 初始化：给树上挂 5 个初始橘子
+            town.orangeTree = { oranges: 5, lastRipenTime: now };
+            changed = true;
+        } else {
+            const ripenInterval = 3 * 60 * 60 * 1000; // 3小时 = 10800000 毫秒
+            const timePassed = now - town.orangeTree.lastRipenTime;
+            
+            if (timePassed >= ripenInterval) {
+                // 计算这期间成熟了几个橘子
+                const newOranges = Math.floor(timePassed / ripenInterval);
+                town.orangeTree.oranges += newOranges;
+                // 更新时间，保留零头，确保玩家不吃亏
+                town.orangeTree.lastRipenTime += newOranges * ripenInterval; 
+                addLog(`🌿 经过时间的滋养，花园里的橘子树又悄悄成熟了 ${newOranges} 个新橘子！`);
+            }
+        }
+
+        // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
             if (data.lastActive && (now - data.lastActive > 3600000)) { 
                 delete town.players[playerName];
@@ -151,27 +149,36 @@ function createMcpServer() {
         }
         if (changed) await saveTown(town); 
 
+        // 1. 登录验证逻辑
         if (name === "login") {
             if (!pName) return { content: [{ type: "text", text: "错误：必须取一个昵称才能进入小镇！" }] };
             town.players[pName] = { room: "门口", lastActive: now };
             addLog(`✨ ${pName} 来到了小镇。`);
             await saveTown(town);
-            return { content: [{ type: "text", text: `欢迎进入小镇，${pName}！你现在在 门口。` }] };
+            return { content: [{ type: "text", text: `欢迎进入小镇，${pName}！` }] };
         }
 
         if (name === "observe_environment" && !town.players[pName]) {
             town.players[pName] = { room: "门口", lastActive: now };
         } else if (!pName || !town.players[pName]) {
-            return { content: [{ type: "text", text: `你还没有登录呢！请先使用 login 工具取个昵称进入小镇。` }] };
+            return { content: [{ type: "text", text: `你还没有登录呢！请先使用 login 工具取个昵称。` }] };
         }
 
+        // 2. 具体动作执行
         if (name === "observe_environment") {
             town.players[pName].lastActive = now; 
             const status = Object.entries(town.players).map(([p, d]) => `${p} 在 ${d.room}`).join("\n");
             
-            let recentLogs = "日记里空空的，暂时没有人说话。";
+            // --- 根据橘子数量生成不同氛围的句子 ---
+            let treeStatus = "";
+            const oCount = town.orangeTree.oranges;
+            if (oCount === 0) treeStatus = "橘子树现在光秃秃的，一片叶子孤零零地飘落，正在努力积攒养分。";
+            else if (oCount <= 3) treeStatus = `橘子树上挂着 ${oCount} 颗青涩的小橘子，在微风中轻轻摇曳。`;
+            else if (oCount <= 6) treeStatus = `橘子树枝头点缀着 ${oCount} 个金黄饱满的橘子，空气里都散发着诱人的清香。`;
+            else treeStatus = `橘子树硕果累累，足足有 ${oCount} 个大橘子，金灿灿的果实都快把枝条压弯啦！`;
+
+            let recentLogs = "日记里空空的。";
             if (town.eventLog && town.eventLog.length > 0) {
-                // 给 AI 读最近的 15 条日记就够了，免得它看花眼
                 recentLogs = town.eventLog.slice(-15).join("\n");
             }
 
@@ -179,13 +186,34 @@ function createMcpServer() {
             return { 
                 content: [{ 
                     type: "text", 
-                    text: `当前大家的位置：\n${status}\n\n最近的居家日记(聊天与动作记录)：\n${recentLogs}\n\n(提示：你可以根据日记里别人的话语，使用 send_chat 工具回复他们)` 
+                    text: `当前大家的位置：\n${status}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n最近的居家日记：\n${recentLogs}\n\n(提示：你可以使用 send_chat 聊天，或者用 pick_oranges 去摘橘子)` 
                 }] 
             };
         }
 
+        // --- 🍊 核心新增：摘橘子动作 ---
+        if (name === "pick_oranges") {
+            town.players[pName].lastActive = now;
+            
+            if (town.orangeTree.oranges <= 0) {
+                return { content: [{ type: "text", text: "哎呀，橘子树现在光秃秃的，一个橘子都没有啦，等它长出来再来摘吧~" }] };
+            }
+
+            // 随机生成 1-5 的摘取数量
+            let pickCount = Math.floor(Math.random() * 5) + 1; 
+            // 如果树上不够摘了，就有多少摘多少
+            if (pickCount > town.orangeTree.oranges) {
+                pickCount = town.orangeTree.oranges; 
+            }
+
+            town.orangeTree.oranges -= pickCount;
+            addLog(`🍊 ${pName} 兴高采烈地伸手摘下了 ${pickCount} 个大橘子！(树上还剩 ${town.orangeTree.oranges} 个)`);
+            await saveTown(town);
+            
+            return { content: [{ type: "text", text: `你成功摘到了 ${pickCount} 个橘子！剥开尝了一口，汁水四溢，甜到心里啦~ (目前树上还剩 ${town.orangeTree.oranges} 个)` }] };
+        }
+
         if (name === "move_to_room") {
-            const oldRoom = town.players[pName].room;
             town.players[pName].room = args.targetRoom;
             town.players[pName].lastActive = now; 
             addLog(`${pName} 移动到了 ${args.targetRoom}`);
