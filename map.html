@@ -761,10 +761,15 @@ async function saveTown(newData) {
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                
+                // 👇 核心修复：如果小镇是刚刷新的新世界，必须先建厨房和冰箱，不然塞食材会报错！
+                if (!town.kitchen) town.kitchen = {};
+                if (!town.kitchen.fridge) town.kitchen.fridge = { contents: [] };
                 if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
+                
                 town.kitchen.fridge.contents.push(...items);
                 
-                town.players[myName] = { 
+                town.players[myName] = {
                     room: "门口", 
                     lastActive: Date.now(),
                     broughtItems: items, // 【核心】给玩家加上一个“记忆口袋”，记住他进门带的三样专属食材
