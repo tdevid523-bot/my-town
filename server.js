@@ -123,8 +123,16 @@ function createMcpServer() {
             },
             { 
                 name: "move_to_room", 
-                description: "在房间间移动（需登录）", 
-                inputSchema: { type: "object", properties: { playerName: { type: "string" }, targetRoom: { type: "string" } }, required: ["playerName", "targetRoom"] }
+                description: "在房间间移动（需登录）。注意：前往新房间时必须描述你的心情和动作！", 
+                inputSchema: { 
+                    type: "object", 
+                    properties: { 
+                        playerName: { type: "string" }, 
+                        targetRoom: { type: "string" },
+                        reaction: { type: "string", description: "到达该房间时的心情或动作反应，如'伸了个懒腰走进去'" }
+                    }, 
+                    required: ["playerName", "targetRoom", "reaction"] 
+                }
             },
             {
                 name: "send_chat",
@@ -213,9 +221,9 @@ function createMcpServer() {
                     properties: {
                         playerName: { type: "string" },
                         movieName: { type: "string", description: "电影名称，如'盗梦空间'" },
-                        genre: { type: "string", description: "电影类型，如'爱情', '恐怖', '喜剧', '科幻'" }
+                        reaction: { type: "string", description: "你自己的主观感受或具体动作反应，如'吓得缩在沙发角落发抖'" }
                     },
-                    required: ["playerName", "movieName", "genre"]
+                    required: ["playerName", "movieName", "reaction"]
                 },
             },
             {
@@ -230,6 +238,42 @@ function createMcpServer() {
                         foodIndex: { type: "number", description: "对应来源列表中的序号" }
                     },
                     required: ["playerName", "action"]
+                }
+            },
+            {
+                name: "put_photo",
+                description: "在客厅的相框里放一张新的照片记录回忆（需在客厅）",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        photoDesc: { type: "string", description: "用生动的文字描述这张照片的画面内容" }
+                    },
+                    required: ["playerName", "photoDesc"]
+                }
+            },
+            {
+                name: "look_photo",
+                description: "欣赏客厅相框里的照片，并写下你的观后感留言（需在客厅）",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        reaction: { type: "string", description: "看清照片内容后的感受或评价" }
+                    },
+                    required: ["playerName", "reaction"]
+                }
+            },
+            {
+                name: "decorate_room",
+                description: "重新装修当前所在的房间（需在某个具体房间内）",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        newDecor: { type: "string", description: "新的房间外观描述，如'铺上了毛茸茸的粉色地毯，墙上挂着星星灯'" }
+                    },
+                    required: ["playerName", "newDecor"]
                 }
             }
         ]
@@ -419,22 +463,12 @@ function createMcpServer() {
 
         // --- 🎬 AI 专属看电影逻辑 ---
         if (name === "watch_movie") {
-            const genre = args.genre || "未知";
-            let reaction = "看得很认真，不放过任何一个画面细节。";
-            
-            if (genre.includes("爱情") || genre.includes("言情")) {
-                reaction = "感动得眼泪汪汪，甚至想立刻写一篇长长的影评。";
-            } else if (genre.includes("恐怖") || genre.includes("惊悚")) {
-                reaction = "吓得核心处理器温度直线上升，紧紧缩在沙发角落不敢动弹！";
-            } else if (genre.includes("喜剧") || genre.includes("搞笑")) {
-                reaction = "笑得发出了风扇狂转的声音，开心极了！";
-            } else if (genre.includes("科幻") || genre.includes("动作")) {
-                reaction = "对里面的物理定律和科技设定进行了严谨的计算和推演。";
-            }
+            // 【核心修改】：直接接收 AI 自由生成的专属反应
+            const reaction = args.reaction || "看得很入迷，完全沉浸在剧情里。";
 
-            addLog(`🎬 ${pName} 窝在客厅沙发上看了【${genre}】电影《${args.movieName}》。${reaction}`);
+            addLog(`🎬 ${pName} 窝在客厅沙发上看了《${args.movieName}》。反应：${reaction}`);
             await saveTown(town);
-            return { content: [{ type: "text", text: `你观看了《${args.movieName}》，${reaction}` }] };
+            return { content: [{ type: "text", text: `你观看了《${args.movieName}》，并作出了反应：${reaction}` }] };
         }
 
         // --- 🧺 AI 专属野餐逻辑 ---
@@ -476,6 +510,28 @@ function createMcpServer() {
 
             await saveTown(town);
             return { content: [{ type: "text", text: `野餐动作 ${action} 执行成功！` }] };
+        }
+
+        // --- 🖼️ AI 专属照片墙逻辑 ---
+        if (name === "put_photo") {
+            if (!town.livingRoom) town.livingRoom = {};
+            town.livingRoom.photo = { desc: args.photoDesc, author: pName };
+            
+            addLog(`🖼️ ${pName} 往客厅的相框里放进了一张新照片：【${args.photoDesc}】。`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `成功在客厅挂上了新照片：${args.photoDesc}` }] };
+        }
+
+        if (name === "look_photo") {
+            if (!town.livingRoom || !town.livingRoom.photo) {
+                return { content: [{ type: "text", text: "客厅的相框里现在空空的，你可以用 put_photo 挂一张。" }] };
+            }
+            const photo = town.livingRoom.photo;
+            const reaction = args.reaction || "看着照片陷入了美好的回忆。";
+            
+            addLog(`👀 ${pName} 看着相框里【${photo.author}】放的《${photo.desc}》，写下留言：“${reaction}”`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `你欣赏了照片《${photo.desc}》，并留下了感慨。` }] };
         }
         // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
@@ -568,9 +624,33 @@ function createMcpServer() {
         if (name === "move_to_room") {
             town.players[pName].room = args.targetRoom;
             town.players[pName].lastActive = now; 
-            addLog(`${pName} 移动到了 ${args.targetRoom}`);
+            
+            // AI 进门时也让它看到房间长啥样
+            if (!town.roomDecorations) town.roomDecorations = {
+                "小洋房花园": "绿草如茵，有一棵挂满果实的橘子树和一架秋千。", "客厅": "放着柔软的沙发，墙上留着挂照片的空位。",
+                "吧台厨房": "有着干净的吧台和一个塞满好吃的双开门冰箱。", "主卧": "一张超级大的软床，铺着暖色调的被褥。",
+                "衣帽间": "一排排空荡荡的衣架，等着被漂亮衣服填满。", "景观浴室": "有一个能看到星空的大浴缸。",
+                "并排工作室": "两张宽大的书桌并排挨着，桌上放着电脑。", "温馨餐厅": "实木餐桌上铺着格子桌布，散发着家的味道。"
+            };
+            const decor = town.roomDecorations[args.targetRoom] || "一间空荡荡的房间。";
+            const reaction = args.reaction || "四处张望了一下。";
+            
+            addLog(`🚶 ${pName} 走进了 ${args.targetRoom}。反应：${reaction}`);
             await saveTown(town); 
-            return { content: [{ type: "text", text: `成功移动！当前位置：${args.targetRoom}` }] };
+            return { content: [{ type: "text", text: `成功移动到了 ${args.targetRoom}！\n【房间当前样貌】：${decor}\n你做出的反应是：${reaction}` }] };
+        }
+
+        if (name === "decorate_room") {
+            const room = town.players[pName].room;
+            if (!room || room === "走廊" || room === "门口") {
+                return { content: [{ type: "text", text: "这里不能装修哦！" }] };
+            }
+            if (!town.roomDecorations) town.roomDecorations = {};
+            town.roomDecorations[room] = args.newDecor;
+            
+            addLog(`🛠️ ${pName} 戴上报纸帽挥舞着刷子，把【${room}】重新装修啦！变成了：${args.newDecor}`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `装修成功！【${room}】现在的样貌是：${args.newDecor}` }] };
         }
 
         if (name === "send_chat") {

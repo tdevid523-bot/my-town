@@ -277,6 +277,9 @@
                     <button id="host-picnic-btn" onclick="handleHostPicnic()" style="display: none; background: #27ae60;">🧺 发起野餐</button>
                     <button id="join-picnic-btn" onclick="handleJoinPicnic()" style="display: none; background: #16a085;">🥪 参加野餐</button>
                     <button id="end-picnic-btn" onclick="handleEndPicnic()" style="display: none; background: #c0392b;">🚮 结束野餐</button>
+                    <button id="put-photo-btn" onclick="handlePutPhoto()" style="display: none; background: #e84393;">🖼️ 挂新照片</button>
+                    <button id="look-photo-btn" onclick="handleLookPhoto()" style="display: none; background: #00cec9;">👀 看照片</button>
+                    <button id="decorate-room-btn" onclick="handleDecorateRoom()" style="display: none; background: #e67e22;">🛠️ 装修房间</button>
                 </div>
             </div>
         </div>
@@ -406,7 +409,10 @@
                 'watch-movie-btn': "客厅",
                 'host-picnic-btn': "小洋房花园",
                 'join-picnic-btn': "小洋房花园",
-                'end-picnic-btn': "小洋房花园"
+                'end-picnic-btn': "小洋房花园",
+                'put-photo-btn': "客厅",
+                'look-photo-btn': "客厅",
+                'decorate-room-btn': "ANY" // 特殊标记，任何房间都可以装修
             };
 
             // 特殊逻辑：根据野餐状态切换按钮
@@ -418,6 +424,12 @@
                 if (!btn) return;
                 
                 let shouldShow = (currentRoom === targetRoom);
+
+
+                // 装修按钮特殊逻辑：只要不在走廊和门口，哪里都能装修！
+                if (btnId === 'decorate-room-btn' && currentRoom && currentRoom !== '走廊' && currentRoom !== '门口') {
+                    shouldShow = true;
+                }
 
                 // 野餐按钮的特殊过滤逻辑
                 if (btnId === 'host-picnic-btn' && picnic) shouldShow = false; 
@@ -491,31 +503,73 @@
         }
         // --- 🎬 客厅家庭影院逻辑 ---
         function handleWatchMovie() {
-            const movieName = prompt("宝宝想看什么电影呀？(比如：泰坦尼克号、咒怨)", "星际穿越");
+            const movieName = prompt("宝宝想看什么电影呀？(比如：泰坦尼克号、星际穿越)", "星际穿越");
             if (!movieName) return;
-            const genre = prompt("这部电影是什么类型的？(比如：爱情、恐怖、喜剧、科幻、动作)", "科幻");
-            if (!genre) return;
+            
+            // 【核心修改】：让宝宝自己填写独一无二的感受或动作！
+            const reaction = prompt("看完这部电影你有什么感受或者反应呀？", "感动得稀里哗啦，想要一个温暖的考拉抱抱");
+            if (!reaction) return;
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 
-                // 根据电影类型生成不同的观影反应
-                let reaction = "看得津津有味。";
-                if (genre.includes("爱情") || genre.includes("言情")) {
-                    reaction = "感动得稀里哗啦，眼泪汪汪地想要一个温暖的抱抱 (っ´ω`c)♡";
-                } else if (genre.includes("恐怖") || genre.includes("惊悚")) {
-                    reaction = "吓得立刻钻进了毯子里，紧紧闭着眼睛不敢看！(＞﹏＜)";
-                } else if (genre.includes("喜剧") || genre.includes("搞笑")) {
-                    reaction = "笑得前仰后合，在沙发上直打滚！哈哈哈~";
-                } else if (genre.includes("科幻") || genre.includes("动作")) {
-                    reaction = "被震撼的画面惊呆了，连连发出'哇哦'的惊叹！";
-                } else if (genre.includes("悲剧")) {
-                    reaction = "哭成了泪人，抽抽搭搭地用掉了一整包纸巾 ૮₍ɵ̷﹏ɵ̷̥̥᷅₎ა";
-                } else {
-                    reaction = "完全沉浸在精彩的剧情里啦。";
+                town.eventLog.push(`[${now}] 🎬 ${myName} 窝在客厅沙发上看了《${movieName}》。反应：${reaction}`);
+                return town;
+            });
+        }
+
+        // --- 🖼️ 客厅照片墙逻辑 ---
+        function handlePutPhoto() {
+            const desc = prompt("宝宝想在相框里放一张什么样的照片呀？(用文字描述画面，比如：我和Galen在海边牵手的背影)", "我们在花园野餐的大合照");
+            if (!desc) return;
+
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.livingRoom) town.livingRoom = {}; // 初始化客厅数据
+                
+                town.livingRoom.photo = { desc: desc, author: myName };
+                town.eventLog.push(`[${now}] 🖼️ ${myName} 往客厅的相框里小心翼翼地放进了一张新照片：【${desc}】。`);
+                return town;
+            });
+        }
+
+        function handleLookPhoto() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.livingRoom || !town.livingRoom.photo) {
+                    alert("相框里现在空空的，快去挂一张充满回忆的照片吧！");
+                    return town;
                 }
 
-                town.eventLog.push(`[${now}] 🎬 ${myName} 窝在客厅沙发上看了【${genre}】片《${movieName}》。${reaction}`);
+                const photo = town.livingRoom.photo;
+                const reaction = prompt(`相框里正放着【${photo.author}】洗出来的照片：\n《${photo.desc}》\n\n看完这张照片，宝宝有什么想记录下来的观后感吗？`, "回忆起那天的阳光，心里暖暖的，想要抱抱~");
+                
+                if (reaction) {
+                    town.eventLog.push(`[${now}] 👀 ${myName} 驻足在客厅的照片墙前看了很久，写下留言：“${reaction}”`);
+                } else {
+                    town.eventLog.push(`[${now}] 👀 ${myName} 驻足在客厅的照片墙前看了很久，嘴角挂着温柔的微笑。`);
+                }
+                return town;
+            });
+        }
+
+        // --- 🛠️ 房间装修系统 ---
+        function handleDecorateRoom() {
+            pushUpdate(town => {
+                const room = town.players[myName].room;
+                if (!room || room === "走廊" || room === "门口") {
+                    alert("这里是公共过道，不能乱涂乱画哦！"); return town;
+                }
+                
+                if (!town.roomDecorations) town.roomDecorations = {};
+                const oldDecor = town.roomDecorations[room] || "一间空荡荡的房间，等待着主人的布置。";
+                
+                const newDecor = prompt(`当前【${room}】的样貌是：\n${oldDecor}\n\n宝宝想把它重新装修成什么样子呢？(描述出具体的家具、颜色和氛围)`, oldDecor);
+                if (!newDecor || newDecor === oldDecor) return town;
+                
+                town.roomDecorations[room] = newDecor;
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🛠️ ${myName} 戴上报纸帽，挥舞着小锤子和刷子，把【${room}】重新装修啦！现在这里变成了：${newDecor}`);
                 return town;
             });
         }
@@ -749,9 +803,21 @@
                 const threshold = (closestRoom === "小洋房花园") ? 15 : 8; 
                 const newRoom = minDistance < threshold ? closestRoom : "走廊";
 
-                // 如果跑到了新房间，就在日记里说一声
+                // 如果跑到了新房间，就触发“登场动作”并展示房间样貌
                 if (p.room !== newRoom && newRoom !== "走廊") {
-                    town.eventLog.push(`[${nowTime}] 🚶 ${myName} 溜达进了 ${newRoom}。`);
+                    if (!town.roomDecorations) {
+                        town.roomDecorations = {
+                            "小洋房花园": "绿草如茵，有一棵挂满果实的橘子树和一架秋千。", "客厅": "放着柔软的沙发，墙上留着挂照片的空位。",
+                            "吧台厨房": "有着干净的吧台和一个塞满好吃的双开门冰箱。", "主卧": "一张超级大的软床，铺着暖色调的被褥。",
+                            "衣帽间": "一排排空荡荡的衣架，等着被漂亮衣服填满。", "景观浴室": "有一个能看到星空的大浴缸。",
+                            "并排工作室": "两张宽大的书桌并排挨着，桌上放着电脑。", "温馨餐厅": "实木餐桌上铺着格子桌布，散发着家的味道。"
+                        };
+                    }
+                    const decor = town.roomDecorations[newRoom] || "一间空荡荡的房间，等待着主人的布置。";
+                    
+                    const reaction = prompt(`你来到了【${newRoom}】！\n【房间当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？`, "开心地四处张望");
+                    const finalReaction = reaction || "悄悄地探了个头"; 
+                    town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。反应：${finalReaction}`);
                 }
                 
                 p.room = newRoom;
@@ -1166,10 +1232,12 @@
                     // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
                     const newRoom = minDistance < 6 ? closestRoom : "走廊";
                     
-                    // 如果你溜达到了一个新房间，日记里会自动播报
+                    // 如果你溜达到了一个新房间，日记里会自动播报并要求填写动作
                     if (p.room !== newRoom && newRoom !== "走廊") {
                         const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                        town.eventLog.push(`[${nowTime}] 🚶 ${myName} 溜达进了 ${newRoom}。`);
+                        const reaction = prompt(`你溜达进了【${newRoom}】！\n宝宝现在的心情和动作是什么呀？`, "跑得气喘吁吁");
+                        const finalReaction = reaction || "悄悄地探了个头";
+                        town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。反应：${finalReaction}`);
                     }
                     
                     p.room = newRoom; // 兼容原来的房间配置按钮
