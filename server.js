@@ -36,12 +36,18 @@ async function loadTown() {
         }
         return data;
     } catch (e) {
-        console.error("加载数据出错:", e);
-        return { players: {}, eventLog: ["🚫 信号连接中，请稍后刷新小镇..."] };
-    }
+                console.error("加载数据出错:", e);
+                // 【终极防丢锁 2】：给因为网络错误产生的空壳贴上“错误标签” (_isError: true)
+                return { _isError: true, players: {}, eventLog: ["🚫 信号连接中，请稍后刷新小镇..."] };
+            }
 }
 
 async function saveTown(newData) {
+    // 【终极防丢锁 3】：准备存入数据库前严加盘查！如果发现是带有错误标签的空壳，一律拦下直接扔掉！
+    if (newData._isError) {
+        console.warn("🛡️ 成功拦截了一次危险的数据覆盖！保护了宝宝的回忆！");
+        return; 
+    }
     try {
         // 核心修复：改用 POST 进行 Upsert (有就更新，没有就创建)，解决空表无法保存的问题
         const res = await fetch(`${SUPABASE_URL}/rest/v1/town_state`, {
