@@ -230,6 +230,46 @@
         
         /* 登录状态提示 */
         #login-status { font-size: 12px; color: #ff8c00; margin-bottom: 5px; }
+
+        /* --- 移动端虚拟方向盘 --- */
+        #mobile-dpad {
+            display: none; /* PC端默认隐藏 */
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 160px;
+            height: 160px;
+            z-index: 9999;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+        @media screen and (max-width: 1024px) {
+            #mobile-dpad {
+                display: grid; /* 手机端自动显示 */
+            }
+        }
+        .dpad-btn {
+            background: rgba(222, 184, 135, 0.85);
+            border: 2px solid #5d4037;
+            border-radius: 12px;
+            color: #3e2723;
+            font-weight: bold;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .dpad-btn:active { background: #ff8c00; transform: scale(0.95); }
+        #dpad-up { grid-column: 2; grid-row: 1; }
+        #dpad-left { grid-column: 1; grid-row: 2; }
+        #dpad-ok { grid-column: 2; grid-row: 2; font-size: 16px; background: rgba(255, 140, 0, 0.9); color: white; }
+        #dpad-right { grid-column: 3; grid-row: 2; }
+        #dpad-down { grid-column: 2; grid-row: 3; }
     </style>
 </head>
 <body>
@@ -283,6 +323,14 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="mobile-dpad">
+        <div class="dpad-btn" id="dpad-up" onclick="handleDpadMove(0, -5)">▲</div>
+        <div class="dpad-btn" id="dpad-left" onclick="handleDpadMove(-5, 0)">◀</div>
+        <div class="dpad-btn" id="dpad-ok" onclick="handleDpadConfirm()">确定</div>
+        <div class="dpad-btn" id="dpad-right" onclick="handleDpadMove(5, 0)">▶</div>
+        <div class="dpad-btn" id="dpad-down" onclick="handleDpadMove(0, 5)">▼</div>
     </div>
 
     <script>
@@ -1281,12 +1329,63 @@ async function saveTown(newData) {
         }
 
         // --- 🎮 核心新增：RPG 键盘移动引擎 & 智能雷达 ---
+        function executePlayerMove(dx, dy) {
+            if (!myName) {
+                alert("请先登录小镇！");
+                return;
+            }
+            pushUpdate(town => {
+                const p = town.players[myName];
+                if (!p) return town;
+                
+                // 1. 初始化坐标（防止旧数据没有xy）
+                if (p.x === undefined) p.x = roomCoords[p.room || "门口"].x;
+                if (p.y === undefined) p.y = roomCoords[p.room || "门口"].y;
+
+                // 2. 更新走动后的坐标，并撞墙检测（0-100不能走出地图边缘）
+                p.x = Math.max(0, Math.min(100, p.x + dx));
+                p.y = Math.max(0, Math.min(100, p.y + dy));
+
+                // 3. 智能雷达：扫描你附近最近的房间
+                let closestRoom = "未知走廊";
+                let minDistance = 1000;
+                Object.entries(roomCoords).forEach(([roomName, pos]) => {
+                    // 勾股定理算距离
+                    const dist = Math.sqrt(Math.pow(p.x - pos.x, 2) + Math.pow(p.y - pos.y, 2));
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestRoom = roomName;
+                    }
+                });
+                
+                // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
+                const newRoom = minDistance < 6 ? closestRoom : "走廊";
+                
+                // 如果你溜达到了一个新房间，日记里会自动播报并要求填写动作
+                if (p.room !== newRoom && newRoom !== "走廊") {
+                    const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                    // 【修复】补全了之前丢失的 decor 变量，防止走到新房间直接报错黑屏
+                    if (!town.roomDecorations) town.roomDecorations = {};
+                    const roomDecor = town.roomDecorations[newRoom] || "一间空荡荡的房间，等待着主人的布置。";
+                    
+                    const reaction = prompt(`你溜达进了【${newRoom}】！\n【当前样貌】：${roomDecor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
+                    const reactionText = reaction ? ` 反应：${reaction}` : "";
+                    town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。${reactionText}`);
+                }
+                
+                p.room = newRoom; // 兼容原来的房间配置按钮
+                p.lastActive = Date.now();
+                return town;
+            });
+        }
+
+        // 绑定键盘事件 (PC端使用)
         window.addEventListener('keydown', (e) => {
             if (!myName) return; 
             // 保护机制：如果你正在聊天框里打字，就不要触发走路啦
             if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
 
-            const speed = 5; // 【网格步伐】：配合 5% 大小的方格，每次按键精准走出一整个方格的距离
+            const speed = 5; 
             let dx = 0, dy = 0;
 
             // --- 🪄 魔法开关：按 G 键一键显现/隐藏网格 ---
@@ -1295,7 +1394,7 @@ async function saveTown(newData) {
                 if (grid) {
                     grid.style.display = grid.style.display === 'none' ? 'block' : 'none';
                 }
-                return; // 按了开关就不用往下执行走路的逻辑啦
+                return; 
             }
             
             // 兼容 WASD 和 上下左右箭头
@@ -1306,49 +1405,30 @@ async function saveTown(newData) {
 
             // 只要有移动
             if (dx !== 0 || dy !== 0) {
-                e.preventDefault(); // 防止按上下键时网页跟着上下滚
-                
-                pushUpdate(town => {
-                    const p = town.players[myName];
-                    if (!p) return town;
-                    
-                    // 1. 初始化坐标（防止旧数据没有xy）
-                    if (p.x === undefined) p.x = roomCoords[p.room || "门口"].x;
-                    if (p.y === undefined) p.y = roomCoords[p.room || "门口"].y;
-
-                    // 2. 更新走动后的坐标，并撞墙检测（0-100不能走出地图边缘）
-                    p.x = Math.max(0, Math.min(100, p.x + dx));
-                    p.y = Math.max(0, Math.min(100, p.y + dy));
-
-                    // 3. 智能雷达：扫描你附近最近的房间
-                    let closestRoom = "未知走廊";
-                    let minDistance = 1000;
-                    Object.entries(roomCoords).forEach(([roomName, pos]) => {
-                        // 勾股定理算距离
-                        const dist = Math.sqrt(Math.pow(p.x - pos.x, 2) + Math.pow(p.y - pos.y, 2));
-                        if (dist < minDistance) {
-                            minDistance = dist;
-                            closestRoom = roomName;
-                        }
-                    });
-                    
-                    // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
-                    const newRoom = minDistance < 6 ? closestRoom : "走廊";
-                    
-                    // 如果你溜达到了一个新房间，日记里会自动播报并要求填写动作
-                    if (p.room !== newRoom && newRoom !== "走廊") {
-                        const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                        const reaction = prompt(`你溜达进了【${newRoom}】！\n【当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
-                        const reactionText = reaction ? ` 反应：${reaction}` : "";
-                        town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。${reactionText}`);
-                    }
-                    
-                    p.room = newRoom; // 兼容原来的房间配置按钮
-                    p.lastActive = Date.now();
-                    return town;
-                });
+                e.preventDefault(); 
+                executePlayerMove(dx, dy);
             }
         });
+
+        // 绑定移动端虚拟摇杆事件
+        function handleDpadMove(dx, dy) {
+            executePlayerMove(dx, dy);
+        }
+
+        function handleDpadConfirm() {
+            if (!myName) {
+                alert("请先登录小镇！");
+                return;
+            }
+            // 确定键逻辑：自动寻找当前所在房间能做的“第一个动作”并执行
+            const visibleBtns = Array.from(document.querySelectorAll('#context-actions button')).filter(btn => btn.style.display === 'block');
+            if (visibleBtns.length > 0) {
+                // 如果有互动按钮，直接触发排在第一位的那个动作，方便手机端操作
+                visibleBtns[0].click();
+            } else {
+                alert("这里是个过道，没有可以互动的特殊物品，宝宝可以去其他房间逛逛哦~");
+            }
+        }
 
     </script>
 </body>
