@@ -294,15 +294,15 @@
         async function pushUpdate(updater) {
             try {
                 let town = await loadTown();
-                if (town._isError) {
-                    console.warn("网络有点小波动，没能更新状态哦~");
+                if (!town || town._isError) {
+                    console.error("无法获取小镇状态，请检查网络或 Supabase 配置");
                     return;
                 }
                 town = updater(town);
                 await saveTown(town);
-                syncTownState();
+                await syncTownState();
             } catch (error) {
-                console.error("执行动作失败啦:", error);
+                console.error("执行动作失败:", error);
             }
         }
         
