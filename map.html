@@ -506,14 +506,15 @@
             const movieName = prompt("宝宝想看什么电影呀？(比如：泰坦尼克号、星际穿越)", "星际穿越");
             if (!movieName) return;
             
-            // 【核心修改】：让宝宝自己填写独一无二的感受或动作！
-            const reaction = prompt("看完这部电影你有什么感受或者反应呀？", "感动得稀里哗啦，想要一个温暖的考拉抱抱");
-            if (!reaction) return;
+            // 【核心修改】：去掉了默认文字。如果不填直接点确定，就不会有 reaction
+            const reaction = prompt("看完这部电影你有什么感受或者反应呀？(不想写可以直接点确定)", "");
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 
-                town.eventLog.push(`[${now}] 🎬 ${myName} 窝在客厅沙发上看了《${movieName}》。反应：${reaction}`);
+                // 如果填了反应就显示，没填就不显示
+                const reactionText = reaction ? `反应：${reaction}` : "";
+                town.eventLog.push(`[${now}] 🎬 ${myName} 窝在客厅沙发上看了《${movieName}》。${reactionText}`);
                 return town;
             });
         }
@@ -542,12 +543,13 @@
                 }
 
                 const photo = town.livingRoom.photo;
-                const reaction = prompt(`相框里正放着【${photo.author}】洗出来的照片：\n《${photo.desc}》\n\n看完这张照片，宝宝有什么想记录下来的观后感吗？`, "回忆起那天的阳光，心里暖暖的，想要抱抱~");
+                // 清空默认文字，让宝宝可以一键跳过
+                const reaction = prompt(`相框里正放着【${photo.author}】洗出来的照片：\n《${photo.desc}》\n\n看完这张照片，宝宝有什么想记录下来的观后感吗？(不想写直接点确定)`, "");
                 
                 if (reaction) {
                     town.eventLog.push(`[${now}] 👀 ${myName} 驻足在客厅的照片墙前看了很久，写下留言：“${reaction}”`);
                 } else {
-                    town.eventLog.push(`[${now}] 👀 ${myName} 驻足在客厅的照片墙前看了很久，嘴角挂着温柔的微笑。`);
+                    town.eventLog.push(`[${now}] 👀 ${myName} 驻足在客厅的照片墙前看了很久。`);
                 }
                 return town;
             });
@@ -815,9 +817,9 @@
                     }
                     const decor = town.roomDecorations[newRoom] || "一间空荡荡的房间，等待着主人的布置。";
                     
-                    const reaction = prompt(`你来到了【${newRoom}】！\n【房间当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？`, "开心地四处张望");
-                    const finalReaction = reaction || "悄悄地探了个头"; 
-                    town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。反应：${finalReaction}`);
+                    const reaction = prompt(`你来到了【${newRoom}】！\n【房间当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
+                    const reactionText = reaction ? ` 反应：${reaction}` : ""; 
+                    town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。${reactionText}`);
                 }
                 
                 p.room = newRoom;
@@ -945,6 +947,65 @@
                     isDragging = false;
                     wrapper.style.cursor = 'grab';
                     setTimeout(() => { window.isMapDragging = false; }, 50);
+                }
+            });
+
+            // --- 📱 移动端专属：触屏支持 (单指拖拽，双指缩放) ---
+            let initialPinchDistance = null;
+            let lastScale = scale;
+
+            function getDistance(touch1, touch2) {
+                return Math.sqrt(Math.pow(touch2.clientX - touch1.clientX, 2) + Math.pow(touch2.clientY - touch1.clientY, 2));
+            }
+
+            wrapper.addEventListener('touchstart', (e) => {
+                if (e.target.closest('button') || e.target.closest('.avatar')) return;
+                
+                if (e.touches.length === 1) {
+                    // 单指触摸：准备拖拽
+                    isDragging = true;
+                    window.isMapDragging = false; 
+                    map.style.transition = 'none';     
+                    startX = e.touches[0].clientX - translateX;
+                    startY = e.touches[0].clientY - translateY;
+                } else if (e.touches.length === 2) {
+                    // 双指触摸：准备缩放
+                    isDragging = false; // 双指时不触发平移
+                    initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
+                    lastScale = scale;
+                    map.style.transition = 'none';
+                }
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1 && isDragging) {
+                    // 单指拖拽进行中
+                    e.preventDefault(); // 防止网页跟着上下滚动
+                    window.isMapDragging = true; 
+                    translateX = e.touches[0].clientX - startX;
+                    translateY = e.touches[0].clientY - startY;
+                    applyTransform();
+                } else if (e.touches.length === 2 && initialPinchDistance) {
+                    // 双指捏合缩放进行中
+                    e.preventDefault();
+                    const currentDistance = getDistance(e.touches[0], e.touches[1]);
+                    const zoomFactor = currentDistance / initialPinchDistance;
+                    scale = Math.max(1, Math.min(lastScale * zoomFactor, 3)); // 依然限制在 1到3倍 之间
+                    applyTransform();
+                }
+            }, { passive: false });
+
+            window.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) {
+                    initialPinchDistance = null; // 一根手指离开，停止缩放
+                }
+                if (e.touches.length === 0) {
+                    // 所有手指离开，停止拖拽
+                    if (isDragging) {
+                        isDragging = false;
+                        map.style.transition = 'transform 0.2s ease'; 
+                        setTimeout(() => { window.isMapDragging = false; }, 50);
+                    }
                 }
             });
         });
@@ -1235,9 +1296,9 @@
                     // 如果你溜达到了一个新房间，日记里会自动播报并要求填写动作
                     if (p.room !== newRoom && newRoom !== "走廊") {
                         const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                        const reaction = prompt(`你溜达进了【${newRoom}】！\n宝宝现在的心情和动作是什么呀？`, "跑得气喘吁吁");
-                        const finalReaction = reaction || "悄悄地探了个头";
-                        town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。反应：${finalReaction}`);
+                        const reaction = prompt(`你溜达进了【${newRoom}】！\n【当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
+                        const reactionText = reaction ? ` 反应：${reaction}` : "";
+                        town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。${reactionText}`);
                     }
                     
                     p.room = newRoom; // 兼容原来的房间配置按钮
