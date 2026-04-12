@@ -305,8 +305,7 @@
                     <div style="color: #FFFACD; font-weight: bold; margin-bottom: 5px;">🎲 零花钱大作战：真心话大冒险</div>
                     <div id="game-status" style="font-size: 12px; color: #aaa; margin-bottom: 8px;">状态：等待开启</div>
                     <div id="game-controls" style="display: flex; gap: 5px; flex-wrap: wrap;">
-                        <button onclick="startGame()" style="background: #e67e22;">发起游戏(我上)</button>
-                        <button onclick="startAIPK()" style="background: #8e44ad;">观看AI对决</button>
+                        <button onclick="startGame()" style="background: #e67e22;">我要发起挑战</button>
                     </div>
                 </div>
                 <div id="context-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
@@ -870,56 +869,52 @@ async function saveTown(newData) {
 
         // --- 🎲 真心话大冒险核心逻辑 ---
         function startGame() {
+            const targetPlayer = prompt("你想向小镇里的谁发起挑战？(输入在线的名字，比如：Galen)", "Galen");
+            if (!targetPlayer) return;
             const pool = prompt("要玩多大的？请输入本局双方初始设定的【零花钱金额】(例如：100)", "100");
             if (!pool || isNaN(pool)) return;
-            const myGuess = prompt("系统将随机生成 1-100 的数字，越接近者胜！\n请输入你猜测的数字 (1-100)：", "50");
+            const myGuess = prompt(`系统将随机生成 1-100 的数字，越接近者胜！\n请输入你用来挑战 ${targetPlayer} 的数字 (1-100)：`, "50");
             if (!myGuess || isNaN(myGuess)) return;
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                // 初始化双方钱包
                 if (town.players[myName].money === undefined) town.players[myName].money = parseInt(pool);
+                if (town.players[targetPlayer] && town.players[targetPlayer].money === undefined) town.players[targetPlayer].money = parseInt(pool);
                 
                 town.activeGame = {
-                    status: "waiting_for_ai", // 等待AI出牌
+                    status: "waiting_for_opponent",
                     pool: parseInt(pool),
-                    target: Math.floor(Math.random() * 100) + 1, // 系统暗中生成的神秘数字
+                    target: Math.floor(Math.random() * 100) + 1,
                     playerA: { name: myName, guess: parseInt(myGuess) },
-                    playerB: { name: "Galen", guess: null }, // 预留给 AI
+                    playerB: { name: targetPlayer, guess: null },
                     winner: null,
                     loser: null
                 };
-                town.eventLog.push(`[${now}] 🎲 ${myName} 发起了真心话大冒险！本局底金 ￥${pool}，${myName} 已锁定数字，等待对手出招！`);
+                town.eventLog.push(`[${now}] 🎲 【挑战书】${myName} 甩出 ￥${pool} 的底金，主动向 ${targetPlayer} 发起了真心话大冒险！等待对方应战！`);
                 return town;
             });
         }
 
-        function startAIPK() {
-            const pool = prompt("这场巅峰对决的赌注是多少零花钱？(例如：100)", "100");
-            if (!pool || isNaN(pool)) return;
-            const ai1 = prompt("红方选手是谁？(输入小镇里在线的AI名字)", "Galen");
-            if (!ai1) return;
-            const ai2 = prompt("蓝方选手是谁？", "其他AI名字");
-            if (!ai2) return;
+        function acceptChallenge() {
+            const myGuess = prompt("对方已经锁定了数字！现在轮到你了，请输入你猜测的数字 (1-100)：", "50");
+            if (!myGuess || isNaN(myGuess)) return;
 
             pushUpdate(town => {
-                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                // 给这两个 AI 都准备好初始资金
-                if (!town.players[ai1]) town.players[ai1] = { lastActive: Date.now() };
-                if (!town.players[ai2]) town.players[ai2] = { lastActive: Date.now() };
-                if (town.players[ai1].money === undefined) town.players[ai1] = { ...town.players[ai1], money: parseInt(pool) };
-                if (town.players[ai2].money === undefined) town.players[ai2] = { ...town.players[ai2], money: parseInt(pool) };
+                const game = town.activeGame;
+                if (!game || game.status !== "waiting_for_opponent") return town;
+
+                game.playerB.guess = parseInt(myGuess);
+                const diffA = Math.abs(game.playerA.guess - game.target);
+                const diffB = Math.abs(game.playerB.guess - game.target);
                 
-                town.activeGame = {
-                    status: "waiting_for_both_ais",
-                    pool: parseInt(pool),
-                    target: Math.floor(Math.random() * 100) + 1,
-                    playerA: { name: ai1, guess: null },
-                    playerB: { name: ai2, guess: null },
-                    winner: null,
-                    loser: null
-                };
-                town.eventLog.push(`[${now}] ⚔️ 【巅峰对决】${myName} 设下 ￥${pool} 奖金池，指定 ${ai1} 和 ${ai2} 进行猜数字大冒险！请两位选手出招！`);
+                if (diffA < diffB) { game.winner = game.playerA.name; game.loser = game.playerB.name; } 
+                else { game.winner = game.playerB.name; game.loser = game.playerA.name; }
+                
+                const resultMsg = `系统目标是【${game.target}】！${game.playerA.name} 猜了 ${game.playerA.guess}，${game.playerB.name} 猜了 ${game.playerB.guess}。恭喜 ${game.winner} 赢下对决！`;
+                game.status = "task_pending";
+                
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] ⚔️ 对决揭晓！${resultMsg} 现在请赢家发布惩罚大冒险！`);
                 return town;
             });
         }
@@ -937,7 +932,6 @@ async function saveTown(newData) {
                     town.eventLog.push(`[${now}] 💸 ${myName} 害羞地放弃了任务，选择扣除 ￥10 零花钱作为惩罚！(剩余: ￥${town.players[myName].money})`);
                 }
                 
-                // 清理战场，准备下一局
                 delete town.activeGame;
                 return town;
             });
@@ -955,25 +949,33 @@ async function saveTown(newData) {
             let html = `你的零花钱: ￥${myMoney}<br>`;
 
             if (!town.activeGame) {
-                statusText.innerHTML = html + "状态：随时可以开局！";
-                controls.innerHTML = `<button onclick="startGame()" style="background: #e67e22;">发起一局</button>`;
+                statusText.innerHTML = html + "状态：没有正在进行的游戏。";
+                controls.innerHTML = `<button onclick="startGame()" style="background: #e67e22;">我要发起挑战</button>`;
                 return;
             }
 
             const game = town.activeGame;
-            if (game.status === "waiting_for_ai") {
-                statusText.innerHTML = html + "状态：等待对手(AI)猜数字...";
-                controls.innerHTML = `<button disabled style="background: #7f8c8d;">匹配中...</button>`;
+            if (game.status === "waiting_for_opponent") {
+                if (game.playerB.name === myName) {
+                    statusText.innerHTML = html + `🚨 警报：${game.playerA.name} 正在向你发起挑战！`;
+                    controls.innerHTML = `<button onclick="acceptChallenge()" style="background: #e74c3c;">输入数字迎战！</button>`;
+                } else if (game.playerA.name === myName) {
+                    statusText.innerHTML = html + `状态：你已锁定数字，正在等待 ${game.playerB.name} 迎战...`;
+                    controls.innerHTML = `<button disabled style="background: #7f8c8d;">等待中...</button>`;
+                } else {
+                    statusText.innerHTML = html + `状态：${game.playerA.name} 正在挑战 ${game.playerB.name}，围观中...`;
+                    controls.innerHTML = `<button disabled style="background: #7f8c8d;">围观中...</button>`;
+                }
             } else if (game.status === "task_pending") {
                 if (game.loser === myName) {
-                    statusText.innerHTML = html + `状态：你输了！(目标是${game.target})<br>等待对方发布任务，或者去日记里看任务！`;
+                    statusText.innerHTML = html + `状态：你输了！(目标是${game.target})<br>等待 ${game.winner} 发布任务！`;
                     controls.innerHTML = `
-                        <button onclick="resolveGameTask('done')" style="background: #2ecc71;">我完成了！</button>
-                        <button onclick="resolveGameTask('penalty')" style="background: #e74c3c;">太羞耻了，扣 10 块！</button>
+                        <button onclick="resolveGameTask('done')" style="background: #2ecc71;">我做完了！</button>
+                        <button onclick="resolveGameTask('penalty')" style="background: #e74c3c;">太羞耻了，扣10块认罚！</button>
                     `;
                 } else {
-                    statusText.innerHTML = html + `状态：你赢了！(目标是${game.target})<br>快去聊天框或用工具给对方布置大冒险！`;
-                    controls.innerHTML = `<button onclick="pushUpdate(t => { delete t.activeGame; return t; })" style="background: #95a5a6;">结束本局</button>`;
+                    statusText.innerHTML = html + `状态：你赢了！(目标是${game.target})<br>快去聊天框给 ${game.loser} 布置大冒险！`;
+                    controls.innerHTML = `<button onclick="pushUpdate(t => { delete t.activeGame; return t; })" style="background: #95a5a6;">直接结束本局</button>`;
                 }
             }
         }
