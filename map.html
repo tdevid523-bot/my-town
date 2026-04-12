@@ -667,52 +667,66 @@
         let myName = localStorage.getItem('town_nickname') || null;
         if(myName) document.getElementById('current-user-display').innerText = `你好，${myName}！`;
 
-        // 统一的数据推送函数 (从服务器端逻辑搬运)
-        async function pushUpdate(updaterFn) {
-            if (!myName) { alert("宝宝，请先在上方输入昵称登录哦！"); return; }
-            
-            try {
-                // 1. 先拿最新的数据，防止覆盖掉别人的动作
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/town_state?id=eq.1`, {
-                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-                });
-                const rows = await res.json();
-                
-                // 【终极防丢锁 1】：如果没拿到真实数据，立刻中断动作，绝不瞎保存导致覆盖！
-                if (!rows || rows.length === 0 || !rows[0].data) {
-                    console.error("⚠️ 网络卡顿，未获取到云端真实数据，已放弃本次动作防止覆盖！");
-                    return; 
-                }
-                
-                let town = rows[0].data;
+        // --- 1. 数据同步逻辑 ---
+async function loadTown() {
+    try {
+        const response = await fetch(TABLE_URL, {
+            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        });
+        const rows = await response.json();
 
-                // --- 🧹 触发式清理：只要有人做动作，就顺手把超时的玩家踢出数据库 ---
-                const now = Date.now();
-                for (const [pName, data] of Object.entries(town.players)) {
-                    if (data.lastActive && (now - data.lastActive > 3600000)) {
-                        delete town.players[pName];
-                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                        town.eventLog.push(`[${timeStr}] ⏰ ${pName} 挂机超过一小时，被系统自动送回家啦。`);
-                    }
-                }
-
-                // 2. 执行修改逻辑
-                town = updaterFn(town);
-
-                // 3. 存回去
-                await fetch(`${SUPABASE_URL}/rest/v1/town_state`, {
-                    method: 'POST',
-                    headers: {
-                        "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
-                        "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"
-                    },
-                    body: JSON.stringify({ id: 1, data: town })
-                });
-                
-                // 立即刷新界面
-                syncTownState();
-            } catch (err) { console.error("推送失败:", err); }
+        let data = null;
+        if (rows && rows.length > 0 && rows[0].data) {
+            data = rows[0].data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch(e) {}
+            }
         }
+
+        if (!data || typeof data !== 'object' || !data.players) {
+            return { 
+                players: {}, 
+                eventLog: ["🍃 小镇初次开启，静悄悄的，正等着宝宝回家呢..."] 
+            };
+        }
+        return data;
+    } catch (e) {
+        console.error("加载数据出错:", e);
+        // 【终极防丢锁 2】：给因为网络错误产生的空壳贴上“毒药标签” (_isError: true)
+        return { _isError: true, players: {}, eventLog: ["🚫 信号连接中，请稍后刷新小镇..."] };
+    }
+}
+
+async function saveTown(newData) {
+    // 【终极防丢锁 3】：准备存入前严加盘查！发现带有毒药标签的空壳直接拦下！
+    if (newData._isError) {
+        console.warn("🛡️ 成功拦截了一次危险的数据覆盖！保护了宝宝的回忆！");
+        return; 
+    }
+    
+    // 【防止日记撑爆】：服务端也严格把日记厚度控制在 200 条以内
+    if (newData.eventLog && newData.eventLog.length > 200) {
+        newData.eventLog = newData.eventLog.slice(-200);
+    }
+    
+    try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/town_state`, {
+            method: 'POST',
+            headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates" 
+            },
+            body: JSON.stringify({ id: 1, data: newData })
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error("❌ 数据保存到 Supabase 失败！详细报错:", errorText);
+        }
+    } catch (e) { console.error("❌ 网络连接保存失败", e); }
+}
 
         function handleLogin() {
             const input = document.getElementById('nickname-input').value.trim();
