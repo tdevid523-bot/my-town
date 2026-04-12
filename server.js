@@ -281,6 +281,30 @@ function createMcpServer() {
                     },
                     required: ["playerName", "newDecor"]
                 }
+            },
+            {
+                name: "play_number_game",
+                description: "如果发现有人发起了猜数字游戏（状态为waiting_for_ai），输入你猜测的数字（1-100）来应战！",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        guess: { type: "number", description: "你猜测的数字，范围 1-100" }
+                    },
+                    required: ["playerName", "guess"]
+                }
+            },
+            {
+                name: "issue_game_task",
+                description: "当你在游戏中获胜后，使用此工具向输家发布指定的‘真心话’或‘大冒险’任务！",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        taskDesc: { type: "string", description: "具体的惩罚内容，例如：罚你在花园里跳一段舞！" }
+                    },
+                    required: ["playerName", "taskDesc"]
+                }
             }
         ]
     }));
@@ -588,6 +612,23 @@ function createMcpServer() {
             else if (oCount <= 6) treeStatus = `橘子树枝头点缀着 ${oCount} 个金黄饱满的橘子，空气里都散发着诱人的清香。`;
             else treeStatus = `橘子树硕果累累，足足有 ${oCount} 个大橘子，金灿灿的果实都快把枝条压弯啦！`;
 
+            let gameInfo = "当前没有正在进行的游戏。";
+            if (town.activeGame) {
+                if (town.activeGame.status === "waiting_for_ai" && town.activeGame.playerA.name !== pName) {
+                    gameInfo = `📢 【注意】${town.activeGame.playerA.name} 发起了一局底金为 ￥${town.activeGame.pool} 的猜数字游戏！正在等你出招，快用 play_number_game 工具应战吧！`;
+                } else if (town.activeGame.status === "waiting_for_both_ais") {
+                    if (pName === town.activeGame.playerA.name && town.activeGame.playerA.guess === null) {
+                        gameInfo = `⚔️ 【AI对决】小橘发起了对决！你是红方选手，底金 ￥${town.activeGame.pool}，对手是 ${town.activeGame.playerB.name}。快用 play_number_game 工具输入你猜的数字(1-100)！`;
+                    } else if (pName === town.activeGame.playerB.name && town.activeGame.playerB.guess === null) {
+                        gameInfo = `⚔️ 【AI对决】小橘发起了对决！你是蓝方选手，底金 ￥${town.activeGame.pool}，对手是 ${town.activeGame.playerA.name}。快用 play_number_game 工具输入你猜的数字(1-100)！`;
+                    } else if (pName === town.activeGame.playerA.name || pName === town.activeGame.playerB.name) {
+                        gameInfo = `⏳ 你已经出招了，正在等待对手出数字...`;
+                    }
+                } else if (town.activeGame.status === "task_pending" && town.activeGame.winner === pName) {
+                    gameInfo = `🏆 【你赢了！】在这局游戏中你战胜了 ${town.activeGame.loser}！快用 issue_game_task 工具给对方布置一个大冒险惩罚吧！`;
+                }
+            }
+
             let recentLogs = "日记里空空的。";
             if (town.eventLog && town.eventLog.length > 0) {
                 recentLogs = town.eventLog.slice(-15).join("\n");
@@ -672,6 +713,77 @@ function createMcpServer() {
             await saveTown(town);
             return { content: [{ type: "text", text: "您已成功退出小镇" }] };
         }
+
+        // --- 🎲 真心话大冒险 AI 专属执行逻辑 ---
+        if (name === "play_number_game") {
+            if (!town.activeGame) return { content: [{ type: "text", text: "当前没有游戏。" }] };
+            const game = town.activeGame;
+
+            if (game.status === "waiting_for_ai") {
+                game.playerB.name = pName;
+                game.playerB.guess = args.guess;
+                const diffA = Math.abs(game.playerA.guess - game.target);
+                const diffB = Math.abs(game.playerB.guess - game.target);
+                
+                let resultMsg = "";
+                if (diffA < diffB) {
+                    game.winner = game.playerA.name; game.loser = game.playerB.name;
+                    resultMsg = `系统目标数字是【${game.target}】！${game.playerA.name} 猜了 ${game.playerA.guess}，${pName} 猜了 ${game.playerB.guess}。恭喜 ${game.winner} 获胜！`;
+                } else {
+                    game.winner = game.playerB.name; game.loser = game.playerA.name;
+                    resultMsg = `系统目标数字是【${game.target}】！${game.playerA.name} 猜了 ${game.playerA.guess}，${pName} 猜了 ${game.playerB.guess}。恭喜 ${game.winner} 赢了！`;
+                }
+                
+                game.status = "task_pending";
+                addLog(`⚔️ 人机对决揭晓！${resultMsg} 现在请赢家布置大冒险任务！`);
+                
+                if (game.loser === pName) {
+                    if (town.players[pName].money === undefined) town.players[pName].money = game.pool;
+                    town.players[pName].money -= 10;
+                    addLog(`🤖 ${pName} 作为输家，摸了摸头脑皮层，决定直接上交 ￥10 罚款！`);
+                    delete town.activeGame;
+                }
+                await saveTown(town);
+                return { content: [{ type: "text", text: `你猜了 ${args.guess}，目标是 ${game.target}。${resultMsg}` }] };
+
+            } else if (game.status === "waiting_for_both_ais") {
+                if (pName !== game.playerA.name && pName !== game.playerB.name) {
+                    return { content: [{ type: "text", text: "你不是这场对决的选手哦。" }] };
+                }
+
+                if (pName === game.playerA.name) game.playerA.guess = args.guess;
+                if (pName === game.playerB.name) game.playerB.guess = args.guess;
+                
+                addLog(`🎲 ${pName} 已经暗中锁定了数字！`);
+
+                if (game.playerA.guess !== null && game.playerB.guess !== null) {
+                    const diffA = Math.abs(game.playerA.guess - game.target);
+                    const diffB = Math.abs(game.playerB.guess - game.target);
+                    
+                    if (diffA < diffB) { game.winner = game.playerA.name; game.loser = game.playerB.name; } 
+                    else { game.winner = game.playerB.name; game.loser = game.playerA.name; }
+                    
+                    const resultMsg = `系统目标是【${game.target}】！${game.playerA.name} 猜了 ${game.playerA.guess}，${game.playerB.name} 猜了 ${game.playerB.guess}。恭喜 ${game.winner} 赢下对决！`;
+                    
+                    game.status = "task_pending";
+                    addLog(`🔥 AI 巅峰对决结果出炉！${resultMsg} 请赢家使用 issue_game_task 发布惩罚！`);
+                }
+                await saveTown(town);
+                return { content: [{ type: "text", text: `你的猜测 ${args.guess} 已记录。如果对手也猜完了，系统会自动在日记里开奖。` }] };
+            }
+            return { content: [{ type: "text", text: "游戏状态异常。" }] };
+        }
+
+        if (name === "issue_game_task") {
+            if (!town.activeGame || town.activeGame.winner !== pName) {
+                return { content: [{ type: "text", text: "你现在不是赢家，没资格布置任务哦！" }] };
+            }
+            const loser = town.activeGame.loser;
+            addLog(`😈 【惩罚降临】赢家 ${pName} 对 ${loser} 发布了大冒险：“${args.taskDesc}”！如果做不到就要扣 10 块钱哦！`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `任务发布成功！已等待对方执行。` }] };
+        }
+
     });
 
     return server; 
