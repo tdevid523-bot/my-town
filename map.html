@@ -289,6 +289,22 @@
         // 1. 基础配置（宝宝，这里必须填入你在 Supabase 获取的真实地址和钥匙哦！）
         const SUPABASE_URL = "https://fdycchmiilwoxfylmdrk.supabase.co"; 
         const SUPABASE_KEY = "sb_publishable_BhEoCucmNsVJMxLkYkzZkw_L-HrXwel";
+        const TABLE_URL = `${SUPABASE_URL}/rest/v1/town_state?id=eq.1`;
+
+        async function pushUpdate(updater) {
+            try {
+                let town = await loadTown();
+                if (town._isError) {
+                    console.warn("网络有点小波动，没能更新状态哦~");
+                    return;
+                }
+                town = updater(town);
+                await saveTown(town);
+                syncTownState();
+            } catch (error) {
+                console.error("执行动作失败啦:", error);
+            }
+        }
         
         // 房间坐标手册
         const roomCoords = {
