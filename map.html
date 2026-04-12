@@ -511,6 +511,9 @@
 
                 btn.style.display = shouldShow ? "block" : "none";
             });
+
+            // 【核心唤醒】：加上这一句，每次刷新小镇画面时，就会把游戏面板展示出来！
+            updateGamePanel(town);
         }
 
         // --- 🧺 花园野餐会逻辑 ---
