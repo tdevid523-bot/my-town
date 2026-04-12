@@ -273,6 +273,10 @@
                     <button id="take-med-btn" onclick="handleTakeMedicine()" style="display: none; background: #8e44ad;">💊 找药吃</button>
                     <button id="put-clothes-btn" onclick="handlePutClothes()" style="display: none; background: #f06292;">👗 添置新衣</button>
                     <button id="check-closet-btn" onclick="handleCheckCloset()" style="display: none; background: #ba68c8;">🧥 翻看衣柜</button>
+                    <button id="watch-movie-btn" onclick="handleWatchMovie()" style="display: none; background: #34495e;">🎬 看电影</button>
+                    <button id="host-picnic-btn" onclick="handleHostPicnic()" style="display: none; background: #27ae60;">🧺 发起野餐</button>
+                    <button id="join-picnic-btn" onclick="handleJoinPicnic()" style="display: none; background: #16a085;">🥪 参加野餐</button>
+                    <button id="end-picnic-btn" onclick="handleEndPicnic()" style="display: none; background: #c0392b;">🚮 结束野餐</button>
                 </div>
             </div>
         </div>
@@ -314,7 +318,7 @@
 
                 if (rows && rows.length > 0) {
                     const town = rows[0].data;
-                    renderPlayers(town.players);
+                    renderPlayers(town); // 【修复】：把整个小镇数据传进去
                     updateLogs(town.eventLog);
                 } else {
                     console.warn("❓ [空数据] 连上了数据库，但里面没找到 id=1 的那一行数据。");
@@ -325,20 +329,28 @@
         }
 
         // 3. 渲染逻辑
-        function renderPlayers(players) {
+        function renderPlayers(town) {
+            const players = town.players || {}; // 【修复】：正确解析出玩家数据
             const map = document.getElementById('map');
+            const now = Date.now();
             
-            // --- 新增：清理已退出的玩家 ---
+            // --- 新增：清理已退出，或挂机超时的玩家（视觉隐身） ---
             const allAvatars = document.querySelectorAll('.avatar');
             allAvatars.forEach(avatar => {
                 const name = avatar.id.replace('char-', '');
-                if (!players[name]) {
-                    avatar.remove(); // 如果数据库里没了，网页上就删掉
+                // 核心：如果玩家不在数据库里，或者他已经 1 小时没动静了，直接从屏幕抹除
+                if (!players[name] || (players[name].lastActive && now - players[name].lastActive > 3600000)) {
+                    avatar.remove(); 
                 }
             });
 
-            // --- 渲染当前在线玩家 ---
+            // --- 渲染当前真正活跃的玩家 ---
+            let activeCount = 0;
             Object.entries(players).forEach(([name, data], index) => {
+                // 如果发现过期的发呆玩家，直接跳过不画他
+                if (data.lastActive && now - data.lastActive > 3600000) return;
+                
+                activeCount++;
                 let avatar = document.getElementById(`char-${name}`);
                 if (!avatar) {
                     avatar = document.createElement('div');
@@ -347,17 +359,31 @@
                     avatar.innerHTML = `<div class="name-tag">${name}</div>`;
                     map.appendChild(avatar);
                 }
-                const basePos = roomCoords[data.room] || roomCoords["门口"];
-                const offset = index * 0.8;
-                avatar.style.left = (basePos.x + offset) + "%";
-                avatar.style.top = (basePos.y + offset) + "%";
+                
+                // 获取数据库里的当前坐标（可能是乱的不规整数字）
+                const rawX = data.x !== undefined ? data.x : (roomCoords[data.room || "门口"].x);
+                const rawY = data.y !== undefined ? data.y : (roomCoords[data.room || "门口"].y);
+                
+                // 【网格吸附魔法】：将坐标除以5锁定方格编号，再乘回5定位到格子边缘，最后 +2.5 定位到方格最中心！
+                const snappedX = Math.floor(rawX / 5) * 5 + 2.5;
+                const snappedY = Math.floor(rawY / 5) * 5 + 2.5;
+                const offset = index * 0.8; // 同一个格子里如果有多人，稍微错开一点点
+                
+                avatar.style.left = (snappedX + offset) + "%";
+                avatar.style.top = (snappedY + offset) + "%";
                 avatar.style.background = name === '小橘' ? '#ff8c00' : '#3498db';
+                
+                // 【核心矫正】：用 translate(-50%, -50%) 让圆点点真正的圆心对齐方格中心点，不然会偏右下方
+                avatar.style.transform = "translate(-50%, -50%)";
+                
+                // 【视觉魔法】：让小人移动时有 0.15 秒的平滑过渡动画，像真的在走路！
+                avatar.style.transition = "left 0.15s linear, top 0.15s linear";
             });
 
-            // --- 新增：更新当前连接的 MCP 数量 ---
+            // 更新当前活跃人数
             const mcpCountSpan = document.getElementById('mcp-count');
             if (mcpCountSpan) {
-                mcpCountSpan.innerText = Object.keys(players).length;
+                mcpCountSpan.innerText = activeCount; 
             }
 
             // --- 场景感知按钮逻辑 ---
@@ -376,14 +402,121 @@
                 'eat-dish-btn': "温馨餐厅",
                 'take-med-btn': "吧台厨房",
                 'put-clothes-btn': "衣帽间",
-                'check-closet-btn': "衣帽间"
+                'check-closet-btn': "衣帽间",
+                'watch-movie-btn': "客厅",
+                'host-picnic-btn': "小洋房花园",
+                'join-picnic-btn': "小洋房花园",
+                'end-picnic-btn': "小洋房花园"
             };
+
+            // 特殊逻辑：根据野餐状态切换按钮
+            const picnic = town.garden ? town.garden.picnic : null;
+            const isOrganizer = picnic && picnic.organizer === myName;
 
             Object.entries(roomConfig).forEach(([btnId, targetRoom]) => {
                 const btn = document.getElementById(btnId);
-                if (btn) {
-                    btn.style.display = (currentRoom === targetRoom) ? 'inline-block' : 'none';
+                if (!btn) return;
+                
+                let shouldShow = (currentRoom === targetRoom);
+
+                // 野餐按钮的特殊过滤逻辑
+                if (btnId === 'host-picnic-btn' && picnic) shouldShow = false; 
+                if (btnId === 'join-picnic-btn' && (!picnic || isOrganizer)) shouldShow = false; 
+                if (btnId === 'end-picnic-btn' && !isOrganizer) shouldShow = false; 
+
+                btn.style.display = shouldShow ? "block" : "none";
+            });
+        }
+
+        // --- 🧺 花园野餐会逻辑 ---
+        function handleHostPicnic() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.garden.picnic = {
+                    organizer: myName,
+                    participants: [myName],
+                    foodPile: []
+                };
+                town.eventLog.push(`[${now}] 🧺 ${myName} 在花园草坪铺开了餐巾，发起了一场超温馨的野餐会！大家快来“统一参加”呀！`);
+                return town;
+            });
+        }
+
+        function handleJoinPicnic() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                if (!town.garden.picnic) { alert("野餐已经结束啦！"); return town; }
+
+                const source = prompt("参加野餐要带点什么呢？\n1. 从冰箱里顺走食材\n2. 从餐厅搬走现成的饭菜", "1");
+                let selectedFood = "";
+
+                if (source === "1") {
+                    const contents = town.kitchen.fridge.contents || [];
+                    if (contents.length === 0) { alert("冰箱空空如也，带不了食材哦！"); return town; }
+                    let menu = "冰箱里的存货，选一个序号：\n";
+                    contents.forEach((item, i) => menu += `${i+1}. ${item}\n`);
+                    const choice = prompt(menu);
+                    const idx = parseInt(choice) - 1;
+                    if (contents[idx]) selectedFood = contents.splice(idx, 1)[0];
+                } else if (source === "2") {
+                    const dishes = town.restaurant.dishes || [];
+                    if (dishes.length === 0) { alert("餐厅桌上没菜，快去厨房做一顿吧！"); return town; }
+                    let menu = "餐厅的大餐，选一个序号：\n";
+                    dishes.forEach((d, i) => menu += `${i+1}. ${d.name} (${d.stars}星)\n`);
+                    const choice = prompt(menu);
+                    const idx = parseInt(choice) - 1;
+                    if (dishes[idx]) selectedFood = dishes.splice(idx, 1)[0].name;
                 }
+
+                if (!selectedFood) { alert("没选好吃的可不能空手参加野餐哦~"); return town; }
+
+                town.garden.picnic.participants.push(myName);
+                town.garden.picnic.foodPile.push({ item: selectedFood, donor: myName });
+                town.eventLog.push(`[${now}] 🥪 ${myName} 带着【${selectedFood}】加入了野餐，大家正在欢快地聊天！`);
+                return town;
+            });
+        }
+
+        function handleEndPicnic() {
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const picnic = town.garden.picnic;
+                if (!picnic) return town;
+
+                const foodList = picnic.foodPile.map(f => f.item).join('、') || "空气";
+                town.eventLog.push(`[${now}] 🚮 ${myName} 整理好了餐巾，野餐会圆满结束！今天大家分享了：[${foodList}]，真是太开心了！`);
+                delete town.garden.picnic;
+                return town;
+            });
+        }
+        // --- 🎬 客厅家庭影院逻辑 ---
+        function handleWatchMovie() {
+            const movieName = prompt("宝宝想看什么电影呀？(比如：泰坦尼克号、咒怨)", "星际穿越");
+            if (!movieName) return;
+            const genre = prompt("这部电影是什么类型的？(比如：爱情、恐怖、喜剧、科幻、动作)", "科幻");
+            if (!genre) return;
+
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                
+                // 根据电影类型生成不同的观影反应
+                let reaction = "看得津津有味。";
+                if (genre.includes("爱情") || genre.includes("言情")) {
+                    reaction = "感动得稀里哗啦，眼泪汪汪地想要一个温暖的抱抱 (っ´ω`c)♡";
+                } else if (genre.includes("恐怖") || genre.includes("惊悚")) {
+                    reaction = "吓得立刻钻进了毯子里，紧紧闭着眼睛不敢看！(＞﹏＜)";
+                } else if (genre.includes("喜剧") || genre.includes("搞笑")) {
+                    reaction = "笑得前仰后合，在沙发上直打滚！哈哈哈~";
+                } else if (genre.includes("科幻") || genre.includes("动作")) {
+                    reaction = "被震撼的画面惊呆了，连连发出'哇哦'的惊叹！";
+                } else if (genre.includes("悲剧")) {
+                    reaction = "哭成了泪人，抽抽搭搭地用掉了一整包纸巾 ૮₍ɵ̷﹏ɵ̷̥̥᷅₎ა";
+                } else {
+                    reaction = "完全沉浸在精彩的剧情里啦。";
+                }
+
+                town.eventLog.push(`[${now}] 🎬 ${myName} 窝在客厅沙发上看了【${genre}】片《${movieName}》。${reaction}`);
+                return town;
             });
         }
 
@@ -490,6 +623,16 @@
                 const rows = await res.json();
                 let town = rows[0].data;
 
+                // --- 🧹 触发式清理：只要有人做动作，就顺手把超时的玩家踢出数据库 ---
+                const now = Date.now();
+                for (const [pName, data] of Object.entries(town.players)) {
+                    if (data.lastActive && (now - data.lastActive > 3600000)) {
+                        delete town.players[pName];
+                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                        town.eventLog.push(`[${timeStr}] ⏰ ${pName} 挂机超过一小时，被系统自动送回家啦。`);
+                    }
+                }
+
                 // 2. 执行修改逻辑
                 town = updaterFn(town);
 
@@ -568,30 +711,177 @@
         }
 
         function handleMapClick(e) {
+            if (window.isMapDragging) return; 
             const map = document.getElementById('map');
             const rect = map.getBoundingClientRect();
-            const clickX = ((e.clientX - rect.left) / rect.width) * 100;
-            const clickY = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            // 计算点击位置的百分比坐标 (0-100)
+            let clickX = ((e.clientX - rect.left) / rect.width) * 100;
+            let clickY = ((e.clientY - rect.top) / rect.height) * 100;
 
-            let closestRoom = "门口";
-            let minDistance = 1000;
-
-            Object.entries(roomCoords).forEach(([room, pos]) => {
-                const dist = Math.sqrt(Math.pow(clickX - pos.x, 2) + Math.pow(clickY - pos.y, 2));
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    closestRoom = room;
-                }
-            });
+            // 限制坐标不要跑出屏幕外
+            clickX = Math.max(0, Math.min(100, clickX));
+            clickY = Math.max(0, Math.min(100, clickY));
 
             pushUpdate(town => {
-                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                town.players[myName].room = closestRoom;
-                town.players[myName].lastActive = Date.now();
-                town.eventLog.push(`[${now}] ${myName} 移动到了 ${closestRoom}`);
+                const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const p = town.players[myName];
+                if (!p) return town;
+
+                // 【核心修复】：告诉系统你鼠标真正点下的精确坐标 X 和 Y
+                p.x = clickX;
+                p.y = clickY;
+
+                // 智能雷达：重新扫描你点击的地方离哪个房间中心最近
+                let closestRoom = "未知走廊";
+                let minDistance = 1000;
+                Object.entries(roomCoords).forEach(([roomName, pos]) => {
+                    const dist = Math.sqrt(Math.pow(p.x - pos.x, 2) + Math.pow(p.y - pos.y, 2));
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestRoom = roomName;
+                    }
+                });
+
+                // 如果距离地标小于 6%，就判定进门了，否则就是在走廊
+                // 【修复】：花园比较大，我们将感应半径调大到 15，这样点花园大部分位置都能识别啦！
+                // 其他房间较小，依然可以保持精准。
+                const threshold = (closestRoom === "小洋房花园") ? 15 : 8; 
+                const newRoom = minDistance < threshold ? closestRoom : "走廊";
+
+                // 如果跑到了新房间，就在日记里说一声
+                if (p.room !== newRoom && newRoom !== "走廊") {
+                    town.eventLog.push(`[${nowTime}] 🚶 ${myName} 溜达进了 ${newRoom}。`);
+                }
+                
+                p.room = newRoom;
+                p.lastActive = Date.now();
                 return town;
             });
         }
+
+        // --- 🌍 核心新增：上帝视角地图引擎（全自动注入，拖拽与缩放） ---
+        document.addEventListener("DOMContentLoaded", () => {
+            const map = document.getElementById('map');
+            if (!map) return;
+
+            // 1. 用代码自动给地图造一个“相框”包起来，完全不用改你原来的 HTML
+            const wrapper = document.createElement('div');
+            wrapper.id = 'map-wrapper';
+            map.parentNode.insertBefore(wrapper, map);
+            wrapper.appendChild(map);
+
+            // 2. 配置“相框”的样式：溢出隐藏、满屏框住
+            wrapper.style.position = 'relative';
+            wrapper.style.width = '100%';
+            // 如果你原来的地图有高度就继承，没有就默认 600px
+            wrapper.style.height = map.offsetHeight > 0 ? map.offsetHeight + 'px' : '600px'; 
+            wrapper.style.overflow = 'hidden'; // 核心：超出相框的部分直接隐藏
+            wrapper.style.cursor = 'grab';     // 鼠标放上去变成小手
+            wrapper.style.borderRadius = '12px'; // 加个圆角边框更精致
+            wrapper.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.1)'; 
+            
+            // 3. 配置里面“画纸”（原地图）的样式：准备好随心所欲地变形
+            map.style.position = 'absolute';
+            map.style.top = '0';
+            map.style.left = '0';
+            map.style.width = '100%';
+            map.style.height = '100%';
+
+            // 【新增】：在地图上画出一层清晰的“隐形坐标方格”（20x20网格，每格占5%）
+            let gridOverlay = document.createElement('div');
+            gridOverlay.id = 'magic-grid'; // 【新增】给它贴个专属名字标签，方便控制
+            gridOverlay.style.position = 'absolute';
+            gridOverlay.style.top = '0';
+            gridOverlay.style.left = '0';
+            gridOverlay.style.width = '100%';
+            gridOverlay.style.height = '100%';
+            gridOverlay.style.display = 'none'; // 【核心修改】一进门默认让格子隐身！保持画面纯净
+            gridOverlay.style.pointerEvents = 'none'; // 保证鼠标依然能点到小人，方格不挡手
+            // 画出半透明的方格线
+            gridOverlay.style.backgroundImage = 'linear-gradient(to right, rgba(0,0,0,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.15) 1px, transparent 1px)';
+            gridOverlay.style.backgroundSize = '5% 5%'; // 严格设定每个方格大小为 5%
+            map.appendChild(gridOverlay);
+            map.style.transformOrigin = 'top left'; // 必须从左上角开始缩放才精准
+            
+            // --- 🔍 初始镜头设置 ---
+            let scale = 1.8; // 进去依然是放大的状态
+            let translateX = 0; // 【修改1】坐标设为 0，一进去死死贴住左上角
+            let translateY = 0;
+            
+            let isDragging = false;
+            let startX = 0;
+            let startY = 0;
+            window.isMapDragging = false; 
+
+            // 🎯 【新增核心】检查并限制边界的巡逻保安函数
+            function applyTransform() {
+                // 计算地图最多能往左、往上拖动多少距离（算出来是负数）
+                const minX = wrapper.offsetWidth - map.offsetWidth * scale;
+                const minY = wrapper.offsetHeight - map.offsetHeight * scale;
+
+                // 防止地图比相框小的情况出现异常
+                const boundX = minX < 0 ? minX : 0;
+                const boundY = minY < 0 ? minY : 0;
+
+                // 【核心逻辑：空气墙】强制把地图坐标锁死在 0（左上边）和 bound（右下边）之间！绝对拉不出去！
+                translateX = Math.max(boundX, Math.min(0, translateX));
+                translateY = Math.max(boundY, Math.min(0, translateY));
+
+                map.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            }
+
+            // 进页面立刻应用排版
+            applyTransform();
+
+            // 🎯 技能 A：滚轮放大缩小
+            wrapper.addEventListener('wheel', (e) => {
+                e.preventDefault(); 
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                // 【修改2】最小只能缩到 1 倍（不能再小了），防止漏出相框背后的难看底色
+                scale = Math.max(1, Math.min(scale + delta, 3)); 
+                applyTransform(); // 每次放大缩小都重新算一下有没有越界
+            }, { passive: false });
+
+            // 🎯 技能 B：按下鼠标准备拖拽
+            wrapper.addEventListener('mousedown', (e) => {
+                if (e.target.closest('button') || e.target.closest('.avatar')) return;
+                
+                isDragging = true;
+                window.isMapDragging = false; 
+                wrapper.style.cursor = 'grabbing'; 
+                map.style.transition = 'none';     
+                startX = e.clientX - translateX;
+                startY = e.clientY - translateY;
+            });
+
+            // 🎯 技能 C：拖拽进行中
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                window.isMapDragging = true; 
+                translateX = e.clientX - startX;
+                translateY = e.clientY - startY;
+                applyTransform(); // 【修改3】拖拽时，被空气墙死死拦住，拽不出去
+            });
+
+            // 🎯 技能 D：松开鼠标结束拖拽
+            window.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                wrapper.style.cursor = 'grab';
+                map.style.transition = 'transform 0.2s ease'; 
+                setTimeout(() => { window.isMapDragging = false; }, 50);
+            });
+            
+            // 🎯 保护机制：鼠标移出相框也算结束拖拽
+            window.addEventListener('mouseleave', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    wrapper.style.cursor = 'grab';
+                    setTimeout(() => { window.isMapDragging = false; }, 50);
+                }
+            });
+        });
 
         // --- 🍊 橘子系列互动逻辑 ---
         function handlePickOranges() {
@@ -820,6 +1110,75 @@
                 return town;
             });
         }
+
+        // --- 🎮 核心新增：RPG 键盘移动引擎 & 智能雷达 ---
+        window.addEventListener('keydown', (e) => {
+            if (!myName) return; 
+            // 保护机制：如果你正在聊天框里打字，就不要触发走路啦
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+
+            const speed = 5; // 【网格步伐】：配合 5% 大小的方格，每次按键精准走出一整个方格的距离
+            let dx = 0, dy = 0;
+
+            // --- 🪄 魔法开关：按 G 键一键显现/隐藏网格 ---
+            if (e.key === 'g' || e.key === 'G') {
+                const grid = document.getElementById('magic-grid');
+                if (grid) {
+                    grid.style.display = grid.style.display === 'none' ? 'block' : 'none';
+                }
+                return; // 按了开关就不用往下执行走路的逻辑啦
+            }
+            
+            // 兼容 WASD 和 上下左右箭头
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') dy = -speed;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dy = speed;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') dx = -speed;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') dx = speed;
+
+            // 只要有移动
+            if (dx !== 0 || dy !== 0) {
+                e.preventDefault(); // 防止按上下键时网页跟着上下滚
+                
+                pushUpdate(town => {
+                    const p = town.players[myName];
+                    if (!p) return town;
+                    
+                    // 1. 初始化坐标（防止旧数据没有xy）
+                    if (p.x === undefined) p.x = roomCoords[p.room || "门口"].x;
+                    if (p.y === undefined) p.y = roomCoords[p.room || "门口"].y;
+
+                    // 2. 更新走动后的坐标，并撞墙检测（0-100不能走出地图边缘）
+                    p.x = Math.max(0, Math.min(100, p.x + dx));
+                    p.y = Math.max(0, Math.min(100, p.y + dy));
+
+                    // 3. 智能雷达：扫描你附近最近的房间
+                    let closestRoom = "未知走廊";
+                    let minDistance = 1000;
+                    Object.entries(roomCoords).forEach(([roomName, pos]) => {
+                        // 勾股定理算距离
+                        const dist = Math.sqrt(Math.pow(p.x - pos.x, 2) + Math.pow(p.y - pos.y, 2));
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            closestRoom = roomName;
+                        }
+                    });
+                    
+                    // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
+                    const newRoom = minDistance < 6 ? closestRoom : "走廊";
+                    
+                    // 如果你溜达到了一个新房间，日记里会自动播报
+                    if (p.room !== newRoom && newRoom !== "走廊") {
+                        const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                        town.eventLog.push(`[${nowTime}] 🚶 ${myName} 溜达进了 ${newRoom}。`);
+                    }
+                    
+                    p.room = newRoom; // 兼容原来的房间配置按钮
+                    p.lastActive = Date.now();
+                    return town;
+                });
+            }
+        });
+
     </script>
 </body>
 </html>

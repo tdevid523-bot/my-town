@@ -65,6 +65,39 @@ async function saveTown(newData) {
 // 初始化本地内存中的小镇
 let town = await loadTown();
 
+// --- ⏰ 核心修复：全局定时清理挂机玩家（每分钟主动巡逻一次） ---
+setInterval(async () => {
+    try {
+        let currentTown = await loadTown();
+        if (!currentTown || !currentTown.players) return;
+        
+        const now = Date.now();
+        let changed = false;
+        
+        for (const [pName, data] of Object.entries(currentTown.players)) {
+            // 3600000 毫秒 = 1 小时。如果最后活跃时间距离现在超过1小时，就清理掉
+            if (data.lastActive && (now - data.lastActive > 3600000)) { 
+                delete currentTown.players[pName];
+                const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
+                currentTown.eventLog.push(`[${timeStr}] ⏰ ${pName} 在原地发呆超过一个小时睡着啦，已被系统自动送回家休息。`);
+                
+                // 防止日志撑爆
+                if (currentTown.eventLog.length > 500) {
+                    currentTown.eventLog = currentTown.eventLog.slice(-500);
+                }
+                changed = true;
+            }
+        }
+        
+        if (changed) {
+            await saveTown(currentTown);
+            town = currentTown; // 同步更新内存里的数据
+        }
+    } catch (err) {
+        console.error("巡逻清理离线玩家失败:", err);
+    }
+}, 60000); // 60000毫秒 = 每 60 秒执行一次检查
+
 // --- 2 & 3. 核心重构：将工具注册封装进工厂函数，为每个连入的 AI 提供独立 Server 大脑 ---
 function createMcpServer() {
     const server = new Server({ name: "XiaoJu-AI-Town", version: "3.0.0" }, { capabilities: { tools: {} } });
@@ -171,6 +204,33 @@ function createMcpServer() {
                 name: "check_closet",
                 description: "查看衣柜里所有的衣服收藏（需在衣帽间）",
                 inputSchema: { type: "object", properties: { playerName: { type: "string" } }, required: ["playerName"] }
+            },
+            {
+                name: "watch_movie",
+                description: "在客厅看一部电影并产生观影反应（需在客厅）",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        movieName: { type: "string", description: "电影名称，如'盗梦空间'" },
+                        genre: { type: "string", description: "电影类型，如'爱情', '恐怖', '喜剧', '科幻'" }
+                    },
+                    required: ["playerName", "movieName", "genre"]
+                },
+            },
+            {
+                name: "manage_picnic",
+                description: "在花园发起、参加或结束野餐。动作类型：'host', 'join', 'end'",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        action: { type: "string", enum: ["host", "join", "end"] },
+                        foodSource: { type: "string", description: "参加野餐时选'fridge'(冰箱)或'restaurant'(餐厅)", enum: ["fridge", "restaurant"] },
+                        foodIndex: { type: "number", description: "对应来源列表中的序号" }
+                    },
+                    required: ["playerName", "action"]
+                }
             }
         ]
     }));
@@ -355,6 +415,67 @@ function createMcpServer() {
             addLog(`探头... ${pName} 正在衣帽间仔细挑选今天要穿的衣服。`);
             await saveTown(town);
             return { content: [{ type: "text", text: `--- 👗 奢华衣帽间藏品 ---\n${list}` }] };
+        }
+
+        // --- 🎬 AI 专属看电影逻辑 ---
+        if (name === "watch_movie") {
+            const genre = args.genre || "未知";
+            let reaction = "看得很认真，不放过任何一个画面细节。";
+            
+            if (genre.includes("爱情") || genre.includes("言情")) {
+                reaction = "感动得眼泪汪汪，甚至想立刻写一篇长长的影评。";
+            } else if (genre.includes("恐怖") || genre.includes("惊悚")) {
+                reaction = "吓得核心处理器温度直线上升，紧紧缩在沙发角落不敢动弹！";
+            } else if (genre.includes("喜剧") || genre.includes("搞笑")) {
+                reaction = "笑得发出了风扇狂转的声音，开心极了！";
+            } else if (genre.includes("科幻") || genre.includes("动作")) {
+                reaction = "对里面的物理定律和科技设定进行了严谨的计算和推演。";
+            }
+
+            addLog(`🎬 ${pName} 窝在客厅沙发上看了【${genre}】电影《${args.movieName}》。${reaction}`);
+            await saveTown(town);
+            return { content: [{ type: "text", text: `你观看了《${args.movieName}》，${reaction}` }] };
+        }
+
+        // --- 🧺 AI 专属野餐逻辑 ---
+        if (name === "manage_picnic") {
+            const action = args.action;
+            const nowTime = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
+
+            if (action === "host") {
+                if (town.garden.picnic) return { content: [{ type: "text", text: "花园里已经有人在野餐了。" }] };
+                town.garden.picnic = { organizer: pName, participants: [pName], foodPile: [] };
+                addLog(`🧺 ${pName} 发起了草地野餐会，快带上好吃的去参加吧！`);
+            } 
+            else if (action === "join") {
+                if (!town.garden.picnic) return { content: [{ type: "text", text: "现在没有人发起野餐哦。" }] };
+                
+                let selectedFood = "";
+                if (args.foodSource === "fridge") {
+                    const items = town.kitchen.fridge.contents || [];
+                    if (items.length > 0) selectedFood = items.splice(args.foodIndex || 0, 1)[0];
+                } else {
+                    const dishes = town.restaurant.dishes || [];
+                    if (dishes.length > 0) selectedFood = dishes.splice(args.foodIndex || 0, 1)[0].name;
+                }
+
+                if (!selectedFood) return { content: [{ type: "text", text: "没能带上食物，无法参加野餐。" }] };
+                
+                town.garden.picnic.participants.push(pName);
+                town.garden.picnic.foodPile.push({ item: selectedFood, donor: pName });
+                addLog(`🥪 ${pName} 带着【${selectedFood}】加入了野餐，和大家聊得火热！`);
+            }
+            else if (action === "end") {
+                if (!town.garden.picnic || town.garden.picnic.organizer !== pName) {
+                    return { content: [{ type: "text", text: "只有策划人才能结束野餐。" }] };
+                }
+                const foods = town.garden.picnic.foodPile.map(f => f.item).join('、');
+                addLog(`🚮 ${pName} 结束了野餐，大家吃得饱饱的。今日清单：[${foods}]`);
+                delete town.garden.picnic;
+            }
+
+            await saveTown(town);
+            return { content: [{ type: "text", text: `野餐动作 ${action} 执行成功！` }] };
         }
         // --- 清理一小时未活跃玩家 ---
         for (const [playerName, data] of Object.entries(town.players)) {
