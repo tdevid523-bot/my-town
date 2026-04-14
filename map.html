@@ -983,16 +983,20 @@ async function saveTown(newData) {
             }
 
             const game = town.activeGame;
+            
+            // 🌟 核心新增：强行掀桌按钮，任何人都可以踢翻卡住的牌局
+            const forceCancelBtn = `<button onclick="pushUpdate(t => { delete t.activeGame; const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }); t.eventLog.push(\`[\${now}] 💥 \${myName} 等得不耐烦了，一脚踢翻了游戏桌，强行结束了卡住的对决！\`); return t; })" style="background: #c0392b; margin-left: 5px;">掀桌(强制取消)</button>`;
+
             if (game.status === "waiting_for_opponent") {
                 if (game.playerB.name === myName) {
                     statusText.innerHTML = html + `🚨 警报：${game.playerA.name} 正在向你发起挑战！`;
-                    controls.innerHTML = `<button onclick="acceptChallenge()" style="background: #e74c3c;">输入数字迎战！</button>`;
+                    controls.innerHTML = `<button onclick="acceptChallenge()" style="background: #e74c3c;">输入数字迎战！</button>` + forceCancelBtn;
                 } else if (game.playerA.name === myName) {
                     statusText.innerHTML = html + `状态：你已锁定数字，正在等待 ${game.playerB.name} 迎战...`;
-                    controls.innerHTML = `<button disabled style="background: #7f8c8d;">等待中...</button>`;
+                    controls.innerHTML = `<button disabled style="background: #7f8c8d;">等待中...</button>` + forceCancelBtn;
                 } else {
                     statusText.innerHTML = html + `状态：${game.playerA.name} 正在挑战 ${game.playerB.name}，围观中...`;
-                    controls.innerHTML = `<button disabled style="background: #7f8c8d;">围观中...</button>`;
+                    controls.innerHTML = `<button disabled style="background: #7f8c8d;">围观中...</button>` + forceCancelBtn;
                 }
             } else if (game.status === "task_pending") {
                 if (game.loser === myName) {
@@ -1000,9 +1004,9 @@ async function saveTown(newData) {
                     controls.innerHTML = `
                         <button onclick="resolveGameTask('done')" style="background: #2ecc71;">我做完了！</button>
                         <button onclick="resolveGameTask('penalty')" style="background: #e74c3c;">太羞耻了，扣10块认罚！</button>
-                    `;
+                    ` + forceCancelBtn;
                 } else {
-                    statusText.innerHTML = html + `状态：你赢了！(目标是${game.target})<br>快去聊天框给 ${game.loser} 布置大冒险！`;
+                    statusText.innerHTML = html + `状态：你赢了！(目标是${game.target})<br>快去聊天框给 ${game.loser}布置大冒险！`;
                     controls.innerHTML = `<button onclick="pushUpdate(t => { delete t.activeGame; return t; })" style="background: #95a5a6;">直接结束本局</button>`;
                 }
             }
