@@ -355,6 +355,34 @@
                     return;
                 }
                 town = updater(town);
+
+                // --- 🛡️ 核心拉黑与净化机制 (小橘专属护盾) ---
+                const BANNED_USERS = ["讨厌鬼", "黑名单名字2"]; // 在这里填入你想拉黑的恶劣玩家昵称
+                const BANNED_WORDS = ["尿床", "屎", "尿", "滚"]; // 在这里填入你想屏蔽的恶心词汇
+
+                // 1. 检查操作者是否在黑名单中
+                if (myName && BANNED_USERS.includes(myName)) {
+                    alert("🚫 动作已被拦截：你已被小镇管理员拉黑，禁止互动！");
+                    return; // 直接终止，绝不存入数据库
+                }
+
+                // 2. 检查日志内容是否包含违禁词
+                if (town.eventLog && town.eventLog.length > 0) {
+                    const lastLog = town.eventLog[town.eventLog.length - 1];
+                    let hasBadWord = false;
+                    for (const word of BANNED_WORDS) {
+                        if (lastLog.includes(word)) {
+                            hasBadWord = true;
+                            break;
+                        }
+                    }
+                    if (hasBadWord) {
+                        alert("🚫 动作已被拦截：检测到恶心或违禁内容！不许弄脏小镇环境！");
+                        return; // 直接抛弃这次的脏数据，保护数据库清白
+                    }
+                }
+                // ------------------------------------------------
+
                 await saveTown(town);
                 await syncTownState();
             } catch (error) {

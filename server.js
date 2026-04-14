@@ -334,8 +334,18 @@ function createMcpServer() {
         let changed = false;
 
         const addLog = (msg) => {
+            // --- 🛡️ 云端后台词汇净化盾 ---
+            const BANNED_WORDS = ["尿床", "屎", "尿", "滚"]; // 在这里填入屏蔽词
+            let cleanMsg = msg;
+            for (const word of BANNED_WORDS) {
+                if (cleanMsg.includes(word)) {
+                    console.warn(`🛡️ 拦截到恶心违禁词：${word}`);
+                    cleanMsg = cleanMsg.split(word).join("马赛克"); // 把恶心词汇全部打码
+                }
+            }
+
             const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
-            town.eventLog.push(`[${timeStr}] ${msg}`);
+            town.eventLog.push(`[${timeStr}] ${cleanMsg}`);
             if (town.eventLog.length > 500) town.eventLog = town.eventLog.slice(-500);
             changed = true;
         };
