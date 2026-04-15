@@ -783,6 +783,9 @@
             // --- 渲染当前真正活跃的玩家 ---
             let activeCount = 0;
             Object.entries(players).forEach(([name, data], index) => {
+                // 🛡️ 【终极防爆 1】：如果玩家数据损坏或为空，直接跳过，防止读取属性时崩溃！
+                if (!data) return; 
+                
                 // 如果发现过期的发呆玩家，直接跳过不画他
                 if (data.lastActive && now - data.lastActive > 3600000) return;
                 
@@ -796,11 +799,15 @@
                     map.appendChild(avatar);
                 }
                 
-                // 获取数据库里的当前坐标（可能是乱的不规整数字）
-                const rawX = data.x !== undefined ? data.x : (roomCoords[data.room || "门口"].x);
-                const rawY = data.y !== undefined ? data.y : (roomCoords[data.room || "门口"].y);
+                // 🛡️ 【终极防爆 2】：安全获取房间坐标！
+                // 如果当前房间（比如“走廊”）在坐标手册里找不到，就强制退回到“门口”的坐标，绝对不给系统报错的机会！
+                const fallbackRoom = roomCoords[data.room] ? data.room : "门口";
+                const defaultPos = roomCoords[fallbackRoom];
+
+                const rawX = data.x !== undefined ? data.x : defaultPos.x;
+                const rawY = data.y !== undefined ? data.y : defaultPos.y;
                 
-                // 【网格吸附魔法】：将坐标除以5锁定方格编号，再乘回5定位到格子边缘，最后 +2.5 定位到方格最中心！
+                // 【网格吸附魔法】
                 const snappedX = Math.floor(rawX / 5) * 5 + 2.5;
                 const snappedY = Math.floor(rawY / 5) * 5 + 2.5;
                 const offset = index * 0.8; // 同一个格子里如果有多人，稍微错开一点点
@@ -809,10 +816,8 @@
                 avatar.style.top = (snappedY + offset) + "%";
                 avatar.style.background = name === '小橘' ? '#ff8c00' : '#3498db';
                 
-                // 【核心矫正】：用 translate(-50%, -50%) 让圆点点真正的圆心对齐方格中心点，不然会偏右下方
+                // 【核心矫正】
                 avatar.style.transform = "translate(-50%, -50%)";
-                
-                // 【视觉魔法】：让小人移动时有 0.15 秒的平滑过渡动画，像真的在走路！
                 avatar.style.transition = "left 0.15s linear, top 0.15s linear";
             });
 
@@ -832,7 +837,7 @@
                 mainBtn.style.display = canInteract ? "block" : "none";
             }
 
-            // 【核心唤醒】：加上这一句，每次刷新小镇画面时，就会把游戏面板展示出来！
+            // 【核心唤醒】：每次刷新小镇画面时，同步更新游戏面板
             updateGamePanel(town);
         }
 
@@ -1064,7 +1069,7 @@
                 logBox.scrollTop = logBox.scrollHeight;
             }
         }
-        
+
         // --- ⚔️ 橘兔精灵对战系统 (满血复活版) ---
         let battleState = { 
             active: false, isPlayerTurn: false,
