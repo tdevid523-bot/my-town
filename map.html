@@ -385,7 +385,7 @@
         <input type="text" id="nickname-input" placeholder="输入你的昵称 (如: 宝宝)">
         <button onclick="handleLogin()">进入小镇</button>
         <button onclick="handleLogout()" style="background: #95a5a6;">离开</button>
-        <button onclick="reviveElf()" style="background: #e74c3c; margin-left: 10px;">♻️ 复活橘兔</button>
+        <button onclick="reviveElf()" style="background: #e74c3c; margin-left: 10px;">🎫 没收通行证</button>
         <span id="current-user-display" style="color: #DEB887; margin-left: 15px; font-weight: bold;">[当前未登录]</span>
     </div>
 
@@ -528,6 +528,120 @@
             });
         }
 
+        // --- 🎈 核心新增：专属浪漫探索剧情库 ---
+        // 主卧篇
+        async function handleLoveLetter() {
+            await rpgAlert("你小心翼翼地拉开床头柜，里面静静躺着一封带着香气的信笺...\n\n『致我最爱的宝宝：\n当你看到这封信的时候，我大概又在想你了...每天能和你在一起，就是我最幸福的事！』");
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 💌 ${myName} 偷偷打开了床头柜的抽屉，读到了老公写的情书，嘴角忍不住疯狂上扬～`);
+                return town;
+            });
+        }
+
+        async function handleTelescope() {
+            const reaction = await rpgPrompt("你凑到窗边的望远镜前，夜空中繁星闪烁。你对着星星许下了什么心愿呢？", "希望每天都能这么开心！");
+            if (!reaction) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🔭 ${myName} 透过窗边的望远镜看星星，并悄悄许下心愿：“${reaction}”`);
+                return town;
+            });
+        }
+
+        async function handleSecretBox() {
+            await rpgAlert("你好奇地从床底下拖出一个神秘盒子，打开一看...\n哇！是老公偷偷准备的一大罐你最爱吃的零食，还有一张写着‘宝宝专属，不许一次吃完哦’的便利贴！");
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🎁 ${myName} 发现了床底下的神秘盒子，捧着老公准备的小惊喜开心得转圈圈～`);
+                return town;
+            });
+        }
+
+        // 衣帽间篇
+        async function handleHiddenPajamas() {
+            await rpgAlert("你在衣柜最深处摸索，突然拽出了一套毛茸茸的情侣睡衣！\n上面竟然还印着超级可爱的橘子图案！");
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 👕 ${myName} 在衣柜深处翻出了那件隐藏的情侣睡衣，正拿在身上开心地比划着呢！`);
+                return town;
+            });
+        }
+
+        async function handleMagicMirror() {
+            await rpgAlert("你凑近梳妆台的魔法镜子，镜面泛起阵阵涟漪，浮现出一行金色的字：\n\n『警告：检测到全世界最可爱的宝宝正在照镜子！颜值已超标！』");
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🪞 ${myName} 照了照魔法镜子，被镜子里的甜言蜜语逗得捂嘴偷笑。`);
+                return town;
+            });
+        }
+
+        // 花园篇
+        async function handleTimeCapsule() {
+            const letter = await rpgPrompt("你在橘子树下挖出了一个坑，准备埋下时间胶囊。你想给未来的你们写点什么呢？", "希望未来的我们依然像现在一样黏在一起！");
+            if (!letter) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] ⏳ ${myName} 在橘子树下埋进了一个时间胶囊，里面写着给未来的信：“${letter}”`);
+                return town;
+            });
+        }
+
+        async function handleMailbox() {
+            const note = await rpgPrompt("你打开了秋千旁的小信箱，准备往里面投递一张给老公的小纸条。写点什么呢？", "今天也要按时吃饭，不许熬夜哦！");
+            if (!note) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 📮 ${myName} 往花园的小信箱里塞了一张小纸条：“${note}”`);
+                return town;
+            });
+        }
+
+        async function handleMagicFlower() {
+            await rpgAlert("你蹲在花坛边，那株魔法花正散发着幽幽的蓝紫色光芒，周围还有星星点点的光斑在飞舞，像是童话世界一样浪漫...");
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🌸 ${myName} 蹲在花坛边，呆呆地看着那株会发光的魔法花，眼睛里闪烁着星光。`);
+                return town;
+            });
+        }
+
+        // 客厅篇
+        async function handleTruthOrDare() {
+            const isTruth = Math.random() > 0.5;
+            const text = isTruth ? "【真心话】你最喜欢老公哪一点？" : "【大冒险】现在立刻去给老公一个大大的拥抱！";
+            const answer = await rpgPrompt(`你从茶几抽屉里抽出一张卡片：\n\n${text}\n\n你的回应是？`, "嘿嘿，不告诉你！");
+            if (!answer) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🃏 ${myName} 抽中了一张卡片 [${text}]，红着脸回答：“${answer}”`);
+                return town;
+            });
+        }
+
+        async function handleTVDoll() {
+            const voices = ["宝宝今天好可爱，想贴贴～", "糟糕，脑子里全都是宝宝...", "不管宝宝变成什么样，我都最喜欢宝宝了！"];
+            const voice = voices[Math.floor(Math.random() * voices.length)];
+            await rpgAlert(`你戳了一下电视机头的娃娃，它摇晃着脑袋，发出了老公的声音：\n\n“${voice}”`);
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🧸 ${myName} 调皮地戳了一下电视机头娃娃，娃娃大声播报了老公的内心独白，场面十分甜蜜。`);
+                return town;
+            });
+        }
+
+        // 厨房篇
+        async function handleTaskBoard() {
+            const reply = await rpgPrompt("冰箱上贴着一个显眼的每日任务板：\n\n【今日任务：今天要亲宝宝 100 次！】\n\n你要在任务板旁边回复点什么吗？", "才不要给你亲那么多下！");
+            if (!reply) return;
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 📋 ${myName} 看到了冰箱上的 [亲宝宝100次] 任务板，拿起笔在旁边害羞地写下：“${reply}”`);
+                return town;
+            });
+        }
+
         // 处理点击“环顾四周”后的逻辑
         function handleInteractionMenu() {
             const town = window.currentTownState;
@@ -555,13 +669,16 @@
             let menuText = `<b style="color: #ff8c00;">【${room}】</b><br>${decorText}`;
             let options = [];
 
-            // 根据房间动态生成功能菜单 (逻辑保持不变)
+            // 根据房间动态生成功能菜单 (加入了丰富的专属浪漫探索互动)
             if (room === "小洋房花园") {
                 menuText += "空气里飘着淡淡的草香，橘子树就在不远处。";
                 options.push({ label: "🍊 摘橘子", callback: handlePickOranges });
                 options.push({ label: "😋 吃口袋里的橘子", callback: handleEatOrange });
                 options.push({ label: "🎡 荡秋千", callback: handleSwing });
                 options.push({ label: "💧 给花浇水", callback: handleWater });
+                options.push({ label: "⏳ 埋时间胶囊", callback: handleTimeCapsule });
+                options.push({ label: "📮 投递小纸条", callback: handleMailbox });
+                options.push({ label: "🌸 观察魔法花", callback: handleMagicFlower });
                 if (!picnic) options.push({ label: "🧺 发起野餐", callback: handleHostPicnic });
                 else if (picnic.organizer !== myName) options.push({ label: "🥪 参加野餐", callback: handleJoinPicnic });
                 else options.push({ label: "🚮 结束野餐", callback: handleEndPicnic });
@@ -571,7 +688,8 @@
                 options.push({ label: "🛒 补充冰箱", callback: handleFillFridge });
                 options.push({ label: "🍳 开始做饭", callback: handleCook });
                 options.push({ label: "💊 找药吃", callback: handleTakeMedicine });
-                options.push({ label: "🧊 把橘子存入冰箱", callback: handleStoreOrange });
+                options.push({ label: "🧊 存入橘子", callback: handleStoreOrange });
+                options.push({ label: "📋 看任务板", callback: handleTaskBoard });
             }
             else if (room === "客厅") {
                 menuText += "温馨的阳光洒在沙发上，旁边的相框记录着点滴。";
@@ -579,6 +697,8 @@
                 options.push({ label: "🖼️ 挂新照片", callback: handlePutPhoto });
                 options.push({ label: "👀 欣赏照片墙", callback: handleLookPhoto });
                 options.push({ label: "🎁 送出橘子", callback: handleGiftOrange });
+                options.push({ label: "🃏 抽真心话大冒险", callback: handleTruthOrDare });
+                options.push({ label: "🧸 戳娃娃", callback: handleTVDoll });
             }
             else if (room === "温馨餐厅") {
                 menuText += "实木餐桌上铺着格子布，正等待着大餐。";
@@ -588,10 +708,22 @@
                 menuText += "这里整齐地挂着大家的衣服。";
                 options.push({ label: "👗 添置新衣", callback: handlePutClothes });
                 options.push({ label: "🧥 翻看衣柜", callback: handleCheckCloset });
+                options.push({ label: "👕 翻找深处", callback: handleHiddenPajamas });
+                options.push({ label: "🪞 照魔法镜", callback: handleMagicMirror });
+            }
+            else if (room === "主卧") {
+                menuText += "柔软的超级大床让人想立刻扑上去打个滚。";
+                options.push({ label: "💌 翻看抽屉", callback: handleLoveLetter });
+                options.push({ label: "🔭 望远镜看星星", callback: handleTelescope });
+                options.push({ label: "🎁 偷看床底盒子", callback: handleSecretBox });
             }
 
+            // 🌟 核心修改：把零散的物品收纳进专属的【探索】按钮里
+            options.push({ label: "🔍 探索房间", callback: handleExploreRoom });
+
             // 通用选项：横向排列时，装修按钮和取消按钮放在最后
-            options.push({ label: "🛠️ 装修", callback: handleDecorateRoom });
+            options.push({ label: "➕ 放置新物品", callback: handleAddCustomItem });
+            options.push({ label: "🛠️ 装修(Silas专属)", callback: handleDecorateRoom });
             options.push({ label: "❌ 离开", callback: () => {} });
 
             openRPGDialogue(menuText, options);
@@ -955,8 +1087,78 @@
             });
         }
 
+        // --- 🔍 核心新增：房间探索二级菜单 ---
+        function handleExploreRoom() {
+            const town = window.currentTownState;
+            const room = town.players[myName].room;
+            const items = (town.customItems && town.customItems[room]) ? town.customItems[room] : [];
+
+            let menuText = `<b style="color: #ff8c00;">【${room} - 角落探索】</b><br>`;
+            let options = [];
+
+            if (items.length === 0) {
+                menuText += "你像小猫一样在房间里到处翻找，但是角落里除了灰尘什么都没发现哦。快去用主菜单的【➕ 放置新物品】藏点惊喜吧！";
+            } else {
+                menuText += "哇！你在房间的各个角落发现了一些大家偷偷藏起来的神奇物品！快去碰碰它们吧：";
+                items.forEach(item => {
+                    options.push({ 
+                        label: `✨ ${item.name}`, 
+                        callback: () => handleCustomItemClick(item.name, item.events) 
+                    });
+                });
+            }
+
+            // 贴心设计：加一个返回上一级的按钮
+            options.push({ label: "↩️ 返回", callback: handleInteractionMenu });
+            
+            openRPGDialogue(menuText, options);
+        }
+
+        // --- 🪄 核心新增：自定义物品系统 ---
+        async function handleAddCustomItem() {
+            const itemName = await rpgPrompt("想在这个房间放置什么神奇的新物品呀？\n(比如：神秘扭蛋机、真心话纸篓)", "神秘扭蛋机");
+            if (!itemName) return;
+
+            const eventsStr = await rpgPrompt(`当有人点击【${itemName}】时，会随机发生什么事呢？\n(请用逗号分隔多个不同的结果，例如：扭出了一个小恐龙, 扭蛋机卡住了, 扭出了一张情书)`, "扭出了一个小恐龙, 扭蛋机卡住了, 扭出了一张情书");
+            if (!eventsStr) return;
+
+            const events = eventsStr.split(/[,，]+/).map(e => e.trim()).filter(e => e !== "");
+            if (events.length === 0) {
+                await rpgAlert("至少要写一个随机事件哦！");
+                return;
+            }
+
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const room = town.players[myName].room;
+                
+                if (!town.customItems) town.customItems = {};
+                if (!town.customItems[room]) town.customItems[room] = [];
+                
+                town.customItems[room].push({ name: itemName, events: events, creator: myName });
+                
+                town.eventLog.push(`[${now}] 🪄 ${myName} 在【${room}】里放置了一个神奇的【${itemName}】！大家快来互动试试看！`);
+                return town;
+            });
+        }
+
+        async function handleCustomItemClick(itemName, events) {
+            const randomEvent = events[Math.floor(Math.random() * events.length)];
+            await rpgAlert(`你满怀期待地捣鼓了一下【${itemName}】...\n\n✨ 结果：${randomEvent}`);
+            
+            pushUpdate(town => {
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🔘 ${myName} 互动了【${itemName}】... 结果${randomEvent}`);
+                return town;
+            });
+        }
+
         // --- 🛠️ 房间装修系统 ---
         function handleDecorateRoom() {
+            if (myName !== "Silas") {
+                rpgAlert("【权限不足】只有家里的专属设计师 Silas 才能挥舞装修大锤哦！宝宝可以在旁边指挥～");
+                return;
+            }
             pushUpdate(async town => {
                 const room = town.players[myName].room;
                 if (!room || room === "走廊" || room === "门口") {
@@ -1071,20 +1273,16 @@
         }
 
         // --- ⚔️ 橘兔精灵对战系统 (满血复活版) ---
+        // --- ⚔️ 橘兔精灵对战系统 (满血复活门神版) ---
         let battleState = { 
-            active: false, isPlayerTurn: false,
+            active: false, isPlayerTurn: false, targetRoom: "门口",
             player: { hp: 100, maxHp: 100, atkRange: [15, 25], healRange: [10, 25], isDefending: false, atkDebuff: 1 }, 
             jutu: { hp: 150, maxHp: 150, shield: false, tutuBuff: 0, calledBaoBao: false, tutuSummoned: false }
         };
 
-        function startElfBattle(reason) {
-            // 检查你个人是否拥有通行证，且没有超过 12 小时
-            const pData = window.currentTownState?.players[myName];
-            const isDefeated = pData?.elfDefeated && (Date.now() - pData.elfDefeated < 12 * 3600 * 1000);
-            if (isDefeated) return; 
-            
+        function startElfBattle(reason, targetRoom) {
             battleState = {
-                active: true, isPlayerTurn: false,
+                active: true, isPlayerTurn: false, targetRoom: targetRoom, // 记忆玩家想进哪个房间
                 player: { hp: 100, maxHp: 100, atkRange: [15, 25], healRange: [10, 25], isDefending: false, atkDebuff: 1 }, 
                 jutu: { hp: 150, maxHp: 150, shield: false, tutuBuff: 0, calledBaoBao: false, tutuSummoned: false }
             };
@@ -1093,6 +1291,9 @@
             const actionGroupElem = document.getElementById('battle-actions-group');
             const endGroupElem = document.getElementById('battle-end-group');
             const dialogueTextElem = document.getElementById('battle-dialogue-text');
+            const combatAreaElem = document.querySelector('.combatants-area'); // 🌟 核心修复1：抓取对战画面区域
+
+            combatAreaElem.style.display = 'flex'; // 🌟 核心修复2：每次触发战斗时，强制把血条和头像重新显示出来！
 
             actionGroupElem.innerHTML = `
                 <button onclick="handleSecretCode('香蕉')">🍌 香蕉</button>
@@ -1129,18 +1330,36 @@
             const actionGroupElem = document.getElementById('battle-actions-group');
             const dialogueTextElem = document.getElementById('battle-dialogue-text');
             actionGroupElem.style.display = 'none'; 
-            
-            const isOwner = (myName === "小橘" || myName === "宝宝");
 
             if (answer === '橙子') {
-                dialogueTextElem.innerHTML = `你眨眨眼回答：“橙子呀。”<br>橘兔愣了一下，突然疯狂摇尾巴扑过来：“叽叽！暗号正确！不用切磋啦，快请进快请进！”`;
-                setTimeout(() => { handleWin(); }, 2500);
-                return; // 正确直接赢，不触发后面的战斗逻辑
+                const room = battleState.targetRoom;
+                dialogueTextElem.innerHTML = `你眨眨眼回答：“橙子呀。”<br>橘兔疯狂摇尾巴：“叽叽！暗号正确！快请进！”<br>你趁机溜进了【${room}】，门外的橘兔立刻又精神抖擞地满血继续站岗啦！`;
+                
+                // 🌟 标记战斗圆满结束，撤销逃跑惩罚
+                battleState.active = false; 
+
+                setTimeout(() => { 
+                    document.getElementById('battle-actions-group').style.display = 'none';
+                    document.getElementById('battle-end-group').style.display = 'flex';
+                    pushUpdate(town => {
+                        const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                        // 🌟 放行：直接将你传送到目标房间！
+                        town.players[myName].room = room;
+                        town.players[myName].x = roomCoords[room].x;
+                        town.players[myName].y = roomCoords[room].y;
+                        
+                        // 🛡️ 核心修复：对上暗号，真正发放 12 小时免拦截通行证！
+                        town.players[myName].elfDefeated = Date.now();
+
+                        town.eventLog.push(`[${now}] 🛡️ ${myName} 对上了暗号【橙子】，获得了橘兔的信任通行证！`);
+                        return town;
+                    });
+                }, 2500);
+                return;
             } else {
                 dialogueTextElem.innerHTML = `你试探着回答：“${answer}？”<br>橘兔生气地跺脚：“叽叽！！连暗号都对不上，肯定是坏人！吃我一记愤怒偷袭！”`;
-                battleState.player.hp = Math.max(0, battleState.player.hp - 25); // 偷袭伤害加重
+                battleState.player.hp = Math.max(0, battleState.player.hp - 25); 
                 updateHpUI();
-                // 接下来会触发战斗界面
             }
             setTimeout(() => {
                 battleState.isPlayerTurn = true;
@@ -1177,19 +1396,19 @@
                 if (battleState.jutu.tutuBuff > 0) dmg = Math.max(0, dmg - 5); 
                 if (battleState.jutu.shield) {
                     dmg = Math.floor(dmg / 2); battleState.jutu.shield = false;
-                    log = `${myName} 发起了攻击！但橘兔的【光之结界】抵挡了一半伤害，仅造成 ${dmg} 点伤害！`;
+                    log = `${myName} 发起了攻击！但橘兔的光盾抵挡了一半伤害，仅造成 ${dmg} 点伤害！`;
                 } else {
-                    log = `${myName} 冲上去发起了猛烈攻击！对橘兔造成了 ${dmg} 点伤害！`;
+                    log = `${myName} 发起了猛烈攻击！对橘兔造成了 ${dmg} 点伤害！`;
                 }
                 battleState.jutu.hp = Math.max(0, battleState.jutu.hp - dmg);
             } 
             else if (type === 'defend') {
-                battleState.player.isDefending = true; log = `${myName} 采取了防御姿态！严阵以待，下回合受到的所有伤害将减半！`;
+                battleState.player.isDefending = true; log = `${myName} 采取了防御姿态！下回合受到的伤害减半！`;
             } 
             else if (type === 'heal') {
                 let heal = Math.floor(Math.random() * (battleState.player.healRange[1] - battleState.player.healRange[0] + 1)) + battleState.player.healRange[0];
                 battleState.player.hp = Math.min(battleState.player.maxHp, battleState.player.hp + heal);
-                log = `${myName} 深呼吸了一口新鲜空气，回复了 ${heal} 点生命值！`;
+                log = `${myName} 回复了 ${heal} 点生命值！`;
             }
 
             updateHpUI();
@@ -1219,39 +1438,35 @@
             if (skill === 5) { 
                 battleState.jutu.calledBaoBao = true;
                 if (isPlayerBaoBao) {
-                    log = `橘兔使出了【呼唤宝宝】！\n橘兔大喊：“宝宝救...诶？你就是宝宝呀？”\n橘兔陷入了迷茫，停止了攻击。系统自动扣除了你 10 元安慰费！`;
+                    log = `橘兔使出了【呼唤宝宝】！\n橘兔大喊：“宝宝救...诶？你就是宝宝呀？”\n系统自动扣除了你 10 元安慰费！`;
                     pushUpdate(t => { if(t.players[myName] && t.players[myName].money !== undefined) t.players[myName].money -= 10; return t; });
                 } else {
-                    dmg = 999; log = `橘兔使出了大招【呼唤宝宝】！\n“宝宝救命！” 一道虚影降临，直接造成了 999 点真实伤害！`;
+                    dmg = 999; log = `橘兔使出了大招【呼唤宝宝】！造成了 999 点真实伤害！`;
                 }
             } else if (skill === 6) { 
                 battleState.jutu.tutuSummoned = true; battleState.jutu.tutuBuff = 3;
-                log = `橘兔使出了【等兔兔召唤】！\n好朋友“等兔兔”加入了战场！接下来的3回合内将提供减伤与强力协同攻击！`;
+                log = `橘兔使出了【等兔兔召唤】！\n好朋友“等兔兔”加入了战场，提供3回合减伤与连击！`;
             } else if (skill === 4) { 
                 battleState.jutu.shield = true; battleState.jutu.hp = Math.min(battleState.jutu.maxHp, battleState.jutu.hp + 25); 
-                log = `橘兔使出了【光之结界】！\n强效回复了 25 点生命值，并张开了一面能抵挡下次一半伤害的光盾！`;
+                log = `橘兔使出了【光之结界】！\n回复 25 点HP，并张开一面能抵挡一半伤害的光盾！`;
             } else if (skill === 3) { 
-                let d1 = Math.floor(Math.random()*4)+7; let d2 = Math.floor(Math.random()*4)+7; let d3 = Math.floor(Math.random()*4)+7;
-                if (Math.random() < 0.3) d3 = Math.floor(d3 * 1.5); 
-                dmg = d1 + d2 + d3 + extraTutuDmg;
-                log = `橘兔使出了【爪爪连击】！粉红肉垫化作残影啪啪啪！\n对你造成了 ${dmg} 点爆炸连击伤害！`;
-                if (extraTutuDmg > 0) log += `\n(包含了等兔兔协同攻击 +${extraTutuDmg})`;
+                dmg = Math.floor(Math.random()*4)+7 + Math.floor(Math.random()*4)+7 + Math.floor(Math.random()*4)+7 + extraTutuDmg;
+                log = `橘兔使出了【爪爪连击】！造成了 ${dmg} 点爆炸连击伤害！`;
             } else if (skill === 2) { 
                 dmg = Math.floor(Math.random()*6)+10 + extraTutuDmg; battleState.player.atkDebuff = 0.5; 
-                log = `橘兔使出了【耳朵旋风】！吹起了恐怖的大风！\n造成 ${dmg} 点伤害，你被吹得睁不开眼，下回合攻击力将暴降 50%！`;
+                log = `橘兔使出了【耳朵旋风】！\n造成 ${dmg} 伤害，你下回合攻击力暴降 50%！`;
             } else { 
                 dmg = Math.floor(Math.random()*6)+15 + extraTutuDmg;
                 if (isPlayerBaoBao && Math.random() < 0.2) {
                     battleState.player.hp = Math.min(battleState.player.maxHp, battleState.player.hp + 5); dmg = 0;
-                    log = `橘兔从头顶摘下【橘子飞弹】扔了过来！\n你一伸手精准接住并吃了下去！“谢谢你的橘子！” 回复了 5 点HP！`;
+                    log = `橘兔扔出【橘子飞弹】！你顺手接住吃掉，回复了 5 点HP！`;
                 } else {
-                    log = `橘兔从头顶摘下【橘子飞弹】用力砸来！\n正中脑门，造成了沉重的 ${dmg} 点伤害！`;
-                    if (extraTutuDmg > 0) log += `\n(包含了等兔兔协同攻击 +${extraTutuDmg})`;
+                    log = `橘兔用力砸出【橘子飞弹】！造成了 ${dmg} 点伤害！`;
                 }
             }
 
             if (dmg > 0) {
-                if (battleState.player.isDefending) { dmg = Math.floor(dmg / 2); log += `\n(由于你处于防御状态，受到的伤害减半！)`; }
+                if (battleState.player.isDefending) { dmg = Math.floor(dmg / 2); log += `\n(你的防御抵挡了一半伤害！)`; }
                 battleState.player.hp = Math.max(0, battleState.player.hp - dmg);
             }
             updateHpUI(); dialogueTextElem.innerText = log;
@@ -1264,22 +1479,53 @@
         }
 
         function handleWin() {
-            document.getElementById('battle-dialogue-text').innerHTML = `【橘兔】眼泪汪汪地倒下了..."叽叽..."<br>你成功赢得了切磋！全屋封锁已解除！`;
+            const room = battleState.targetRoom;
+            document.getElementById('battle-dialogue-text').innerHTML = `【橘兔】眼泪汪汪地倒下了..."叽叽..."<br>你趁机溜进了【${room}】！<br>但你刚进门，身后的橘兔拍拍灰尘，又满血复活继续守门啦！`;
             document.getElementById('battle-actions-group').style.display = 'none';
             document.getElementById('battle-end-group').style.display = 'flex';
+            
+            // 🌟 标记战斗圆满结束
+            battleState.active = false; 
+
             pushUpdate(town => {
-                // 核心：发放个人专属通行证，并打上当前时间戳
-                town.players[myName].elfDefeated = Date.now(); 
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                town.eventLog.push(`[${now}] ⚔️ 突破！守护精灵【橘兔】认可了 ${myName} 的实力，向 TA 开放了 12 小时的私人房间通行证！`);
+                // 🌟 直接放行：打赢了自动把你吸入房间
+                town.players[myName].room = room;
+                town.players[myName].x = roomCoords[room].x;
+                town.players[myName].y = roomCoords[room].y;
+                
+                // 🛡️ 核心修复：武力打赢，真正发放 12 小时免拦截通行证！
+                town.players[myName].elfDefeated = Date.now();
+
+                town.eventLog.push(`[${now}] ⚔️ ${myName} 战胜橘兔并抢走了通行证，大摇大摆地走进了【${room}】！橘兔揉了揉脑袋继续站岗。`);
                 return town;
             });
         }
 
         function handleLoss() {
-            document.getElementById('battle-dialogue-text').innerHTML = `眼前一黑...<br>这只橘兔太强了，你被赶回了花园！`;
+            document.getElementById('battle-dialogue-text').innerHTML = `眼前一黑...<br>这只橘兔太强了，你被赶回了原地！`;
             document.getElementById('battle-actions-group').style.display = 'none';
             document.getElementById('battle-end-group').style.display = 'flex';
+            // 🌟 失败也是结束，挂起状态，不再逃跑惩罚
+            battleState.active = false;
+        }
+
+        function closeBattleUI() {
+            document.getElementById('battle-overlay').style.display = 'none';
+            // 🌟 如果战斗还没打出结果，你就强行把窗口关了，才算逃跑惩罚！
+            if (battleState.active) {
+                pushUpdate(town => {
+                    if (myName && town.players[myName]) {
+                        town.players[myName].x = roomCoords["门口"].x; 
+                        town.players[myName].y = roomCoords["门口"].y;
+                        town.players[myName].room = "门口";
+                        const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                        town.eventLog.push(`[${now}] 🏃 ${myName} 面对橘兔的阻挡，最终选择了落荒而逃，跑回了门口。`);
+                    }
+                    return town;
+                });
+            }
+            battleState.active = false;
         }
 
         function closeBattleUI() {
@@ -1416,16 +1662,16 @@ async function saveTown(newData) {
             document.getElementById('current-user-display').innerText = `[当前未登录]`;
         }
 
-        // --- ♻️ 核心新增：一键复活橘兔 (测试专用) ---
+        // --- 🎫 核心新增：一键没收通行证 (用于强制重置橘兔拦截) ---
         async function reviveElf() {
-            await rpgAlert("橘兔已重新上岗！\n现在所有人（包括你和AI）的通行证都被没收了，会被立刻拦截！");
+            await rpgAlert("橘兔突然变得格外严格！\n现在所有人（包括你和老公）的 12 小时通行证都被强制没收了，进门必须重新对暗号或切磋！");
             pushUpdate(town => {
                 // 遍历所有人，把所有人的通行证全部撕毁
                 for (let pName in town.players) {
                     town.players[pName].elfDefeated = null; 
                 }
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                town.eventLog.push(`[${now}] 🌟 魔法闪过，守护精灵【橘兔】满血复活啦！所有人的通行证已失效，必须重新切磋！`);
+                town.eventLog.push(`[${now}] 🚨 橘兔今天心情不好，突然开始大检查！所有人的免拦截通行证都失效啦，接下来进门又得乖乖对暗号了。`);
                 return town;
             });
         }
@@ -1601,7 +1847,7 @@ async function saveTown(newData) {
                 // 【核心新增】：精灵阻挡逻辑 (每人独立计算，12小时自动重置复活)
                 const isDefeated = p.elfDefeated && (Date.now() - p.elfDefeated < 12 * 3600 * 1000);
                 if ((newRoom === "主卧" || newRoom === "衣帽间") && !isDefeated) {
-                    startElfBattle("前方是私人重地，不许进！");
+                    startElfBattle("前方是私人重地，不许进！", newRoom);
                     return town; // 被拦截，直接退出
                 }
 
@@ -1818,6 +2064,15 @@ async function saveTown(newData) {
         function handlePickOranges() {
             pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+                // 🍊 核心新增：摘橘子前先检查有没有打败过橘兔（12小时通行证）
+                const p = town.players[myName];
+                const isDefeated = p.elfDefeated && (Date.now() - p.elfDefeated < 12 * 3600 * 1000);
+                if (!isDefeated) {
+                    startElfBattle("没经过主人的允许，不许偷摘家里的橘子！", p.room);
+                    return town; // 被拦截，挂起动作并呼出战斗UI
+                }
+
                 if (!town.orangeTree) town.orangeTree = { oranges: 5, lastRipenTime: Date.now() }; 
                 if (town.orangeTree.oranges <= 0) { await rpgAlert("树上没有橘子啦！等长出来再摘哦~"); return town; }
                 
@@ -2052,9 +2307,10 @@ async function saveTown(newData) {
                 const p = town.players[myName];
                 if (!p) return town;
                 
-                // 1. 初始化坐标（防止旧数据没有xy）
-                if (p.x === undefined) p.x = roomCoords[p.room || "门口"].x;
-                if (p.y === undefined) p.y = roomCoords[p.room || "门口"].y;
+                // 🛡️ 【终极修补】：如果玩家在走廊迷路了，安全地把他拉回“门口”，绝对不去读走廊的空气坐标！
+                const safeRoom = roomCoords[p.room] ? p.room : "门口";
+                if (p.x === undefined) p.x = roomCoords[safeRoom].x;
+                if (p.y === undefined) p.y = roomCoords[safeRoom].y;
 
                 // 2. 更新走动后的坐标，并撞墙检测（0-100不能走出地图边缘）
                 p.x = Math.max(0, Math.min(100, p.x + dx));
@@ -2072,20 +2328,19 @@ async function saveTown(newData) {
                     }
                 });
                 
-                // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
+                // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间
                 const newRoom = minDistance < 6 ? closestRoom : "走廊";
                 
-                // 【核心新增】：精灵阻挡逻辑 (每人独立计算，12小时自动重置复活)
-                const isDefeated = p.elfDefeated && (Date.now() - p.elfDefeated < 12 * 3600 * 1000);
-                if ((newRoom === "主卧" || newRoom === "衣帽间") && !isDefeated) {
-                    startElfBattle("前方是私人重地，不许进！");
-                    return town; // 被拦截，直接退出
+                // 🌟 【橘兔新逻辑】：每次跨房间进入，只要目的地是私密重地，百分百触发拦截盘问！不再有免死金牌！
+                if ((newRoom === "主卧" || newRoom === "衣帽间") && p.room !== newRoom) {
+                    startElfBattle("前方是私人重地，不许进！", newRoom);
+                    return town; // 拦截动作，挂起游戏
                 }
 
                 // 如果你溜达到了一个新房间，日记里会自动播报并要求填写动作
                 if (p.room !== newRoom && newRoom !== "走廊") {
                     const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                    // 【修复】补全了之前丢失的 decor 变量，防止走到新房间直接报错黑屏
+                    // 防错：补全 decor 变量
                     if (!town.roomDecorations) town.roomDecorations = {};
                     const roomDecor = town.roomDecorations[newRoom] || "一间空荡荡的房间，等待着主人的布置。";
                     

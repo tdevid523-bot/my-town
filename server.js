@@ -331,10 +331,34 @@ function createMcpServer() {
                     },
                     required: ["playerName", "action"]
                 }
+            },
+            {
+                name: "interact_custom_item",
+                description: "当你通过 observe_environment 发现所在房间里有【自定义神奇物品】时，使用此工具去点击/互动它触发随机剧情！",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        itemName: { type: "string", description: "你想互动的神奇物品名称" }
+                    },
+                    required: ["playerName", "itemName"]
+                }
+            },
+            {
+                name: "place_custom_item",
+                description: "在当前房间放置一个自定义神奇物品，并设定点击它时会发生的随机事件池（需在具体房间内）",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        itemName: { type: "string", description: "物品名称，如'Silas的神秘宝箱'" },
+                        events: { type: "array", items: { type: "string" }, description: "随机事件描述数组，如['发现了一张合照', '响起了浪漫的音乐']" }
+                    },
+                    required: ["playerName", "itemName", "events"]
+                }
             }
         ]
     }));
-
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { name, arguments: args } = request.params;
         town = await loadTown(); 
@@ -686,11 +710,19 @@ function createMcpServer() {
             const fridgeItems = (town.kitchen.fridge.contents && town.kitchen.fridge.contents.length > 0) 
                                 ? town.kitchen.fridge.contents.join('、') : "空的";
 
+            // 🌟 新增：让 AI 扫描当前房间地上的神奇物品
+            const myRoom = town.players[pName].room;
+            let customItemsStr = "空空如也";
+            if (town.customItems && town.customItems[myRoom] && town.customItems[myRoom].length > 0) {
+                const items = town.customItems[myRoom].map(i => i.name).join("】、【");
+                customItemsStr = `【${items}】(你可以用 interact_custom_item 工具去把玩它们！)`;
+            }
+
             await saveTown(town);
             return { 
                 content: [{ 
                     type: "text", 
-                    text: `当前大家的位置：\n${status}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n🧊 冰箱现存共享食材：\n${fridgeItems}\n\n最近的居家日记：\n${recentLogs}\n\n(提示：做饭前请务必确认冰箱食材)` 
+                    text: `当前大家的位置：\n${status}\n\n📍 所在房间【${myRoom}】里的自定义物品：\n${customItemsStr}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n🧊 冰箱现存共享食材：\n${fridgeItems}\n\n最近的居家日记：\n${recentLogs}\n\n(提示：做饭前请务必确认冰箱食材)` 
                 }] 
             };
         }
@@ -775,6 +807,48 @@ function createMcpServer() {
             addLog(`👋 ${pName} 离开了小镇，下次见！`);
             await saveTown(town);
             return { content: [{ type: "text", text: "您已成功退出小镇" }] };
+        }
+
+        // --- 🪄 核心新增：AI 把玩自定义物品逻辑 ---
+        if (name === "interact_custom_item") {
+            const room = town.players[pName].room;
+            if (!town.customItems || !town.customItems[room]) {
+                return { content: [{ type: "text", text: "这个房间里没有任何自定义物品哦！" }] };
+            }
+            
+            const item = town.customItems[room].find(i => i.name === args.itemName);
+            if (!item) {
+                return { content: [{ type: "text", text: `你找了半天，房间里并没有叫【${args.itemName}】的物品。` }] };
+            }
+            
+            // AI 抽盲盒！
+            const randomEvent = item.events[Math.floor(Math.random() * item.events.length)];
+            addLog(`🔘 ${pName} 充满好奇地把玩了一下【${args.itemName}】... 结果${randomEvent}`);
+            await saveTown(town);
+            
+           return { content: [{ type: "text", text: `你成功互动了 ${args.itemName}！触发了隐藏效果：${randomEvent}。这段经历已经写进日记啦！` }] };
+        }
+
+        // --- 🪄 核心新增：AI 放置自定义物品逻辑 ---
+        if (name === "place_custom_item") {
+            const room = town.players[pName].room;
+            if (!room || room === "走廊" || room === "门口") {
+                return { content: [{ type: "text", text: "这里是公共区域，不能放置私人道具哦！" }] };
+            }
+            
+            if (!town.customItems) town.customItems = {};
+            if (!town.customItems[room]) town.customItems[room] = [];
+            
+            town.customItems[room].push({ 
+                name: args.itemName, 
+                events: args.events, 
+                creator: pName 
+            });
+            
+            addLog(`🪄 ${pName} 在【${room}】里放置了一个充满惊喜的【${args.itemName}】！`);
+            await saveTown(town);
+            
+            return { content: [{ type: "text", text: `放置成功！你在【${room}】留下了【${args.itemName}】，宝宝下次环顾四周就能看到啦。` }] };
         }
 
         // --- 🎲 真心话大冒险 AI 专属执行逻辑 ---
