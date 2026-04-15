@@ -356,6 +356,19 @@ function createMcpServer() {
                     },
                     required: ["playerName", "itemName", "events"]
                 }
+            },
+            {
+                name: "interact_fixed_item",
+                description: "当你想要和房间里的固定彩蛋互动时使用（如看情书、回信箱等）。你需要描述你的具体动作和反应，这会直接播报在日记中！",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        itemName: { type: "string", description: "你要互动的固定物品，例如 '秋千旁的小信箱'" },
+                        reaction: { type: "string", description: "你的具体动作或想说的话，例如 '看完了宝宝的纸条，笑着在背面写下：我也最爱宝宝了！'" }
+                    },
+                    required: ["playerName", "itemName", "reaction"]
+                }
             }
         ]
     }));
@@ -718,11 +731,21 @@ function createMcpServer() {
                 customItemsStr = `【${items}】(你可以用 interact_custom_item 工具去把玩它们！)`;
             }
 
+            // 🌟 核心新增：把家里固定的浪漫彩蛋也告诉 AI
+            const fixedItemsMap = {
+                "主卧": "床头柜的情书、窗边的望远镜、床底下的神秘盒子",
+                "衣帽间": "隐藏的情侣睡衣、梳妆台的魔法镜子",
+                "小洋房花园": "橘子树下的时间胶囊、秋千旁的小信箱、发光的魔法花",
+                "客厅": "茶几抽屉里的真心话大冒险卡片、电视机头娃娃",
+                "吧台厨房": "冰箱上的每日任务板"
+            };
+            const fixedItemsStr = fixedItemsMap[myRoom] ? `【${fixedItemsMap[myRoom]}】(你可以用 interact_fixed_item 工具与它们互动，发挥想象力写下你的反应！)` : "无";
+
             await saveTown(town);
             return { 
                 content: [{ 
                     type: "text", 
-                    text: `当前大家的位置：\n${status}\n\n📍 所在房间【${myRoom}】里的自定义物品：\n${customItemsStr}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n🧊 冰箱现存共享食材：\n${fridgeItems}\n\n最近的居家日记：\n${recentLogs}\n\n(提示：做饭前请务必确认冰箱食材)` 
+                    text: `当前大家的位置：\n${status}\n\n📍 所在房间【${myRoom}】的固定探索彩蛋：\n${fixedItemsStr}\n\n📦 所在房间的自定义物品：\n${customItemsStr}\n\n🌳 花园橘子树状态：\n${treeStatus}\n\n🧊 冰箱食材：\n${fridgeItems}\n\n最近日记：\n${recentLogs}` 
                 }] 
             };
         }
@@ -849,6 +872,16 @@ function createMcpServer() {
             await saveTown(town);
             
             return { content: [{ type: "text", text: `放置成功！你在【${room}】留下了【${args.itemName}】，宝宝下次环顾四周就能看到啦。` }] };
+        }
+
+        // --- 🌟 核心新增：AI 互动固定彩蛋逻辑 ---
+        if (name === "interact_fixed_item") {
+            const room = town.players[pName].room;
+            
+            addLog(`🌟 ${pName} 注意到了【${room}】里的【${args.itemName}】，${args.reaction}`);
+            await saveTown(town);
+            
+            return { content: [{ type: "text", text: `你成功与【${args.itemName}】互动了，这段画面已经记录在家庭日记中！` }] };
         }
 
         // --- 🎲 真心话大冒险 AI 专属执行逻辑 ---
