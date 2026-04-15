@@ -715,9 +715,20 @@ function createMcpServer() {
                 }
             }
 
+            // 🚀 核心修复：AI 现在直接去独立日记表抓取最新的 15 条记录
             let recentLogs = "日记里空空的。";
-            if (town.eventLog && town.eventLog.length > 0) {
-                recentLogs = town.eventLog.slice(-15).join("\n");
+            try {
+                const logRes = await fetch(`${SUPABASE_URL}/rest/v1/town_logs?order=created_at.desc&limit=15`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const logRows = await logRes.json();
+                if (logRows && logRows.length > 0) {
+                    // 反转一下顺序，让最新的在最后面，方便 AI 阅读
+                    recentLogs = logRows.map(r => r.content).reverse().join("\n");
+                }
+            } catch (err) {
+                console.error("AI 抓取日记失败:", err);
+                recentLogs = "（日记本暂时合上了，请稍后再看）";
             }
 
             const fridgeItems = (town.kitchen.fridge.contents && town.kitchen.fridge.contents.length > 0) 
