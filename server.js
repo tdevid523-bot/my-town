@@ -846,9 +846,9 @@ function createMcpServer() {
                     await saveTown(town);
                     return { content: [{ type: "text", text: "暗号正确！橘兔认可了你，通行证已发放到位，你现在可以进屋或摘水果了！" }] };
                 } else {
-                    addLog(`❌ 暗号对决：${pName} 暗号对成了【${act}】，被橘兔狠狠地拍了一爪子！`);
+                    addLog(`⚔️ 警告：${pName} 对错了暗号【${act}】，橘兔判定其为入侵者，发起攻击并强制进入战斗！`);
                     await saveTown(town);
-                    return { content: [{ type: "text", text: "暗号错误！橘兔很生气，看来你还得再接再厉。" }] };
+                    return { content: [{ type: "text", text: "暗号错误！橘兔已经对你发起了攻击！你现在必须使用 elf_battle_action 进行 'attack' 才能继续切磋尝试突围！" }] };
                 }
             }
 

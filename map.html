@@ -983,19 +983,15 @@
             const isOwner = (myName === "小橘" || myName === "宝宝");
 
             if (answer === '橙子') {
-                if (isOwner) {
-                    dialogueTextElem.innerHTML = `你眨眨眼回答：“橙子呀。”<br>橘兔愣了一下，突然疯狂摇尾巴扑过来：“叽叽！是主人！你是小橘宝宝呀！不用切磋啦，快请进快请进！”`;
-                    setTimeout(() => { handleWin(); }, 3000);
-                    return;
-                }
-                dialogueTextElem.innerHTML = `你自信地回答：“橙子！”<br>橘兔满意地点点头：“叽！暗号正确！既然是自己人，我就稍微放点水吧！来切磋吧！”`;
-                battleState.player.atkDebuff = 1.2; 
+                dialogueTextElem.innerHTML = `你眨眨眼回答：“橙子呀。”<br>橘兔愣了一下，突然疯狂摇尾巴扑过来：“叽叽！暗号正确！不用切磋啦，快请进快请进！”`;
+                setTimeout(() => { handleWin(); }, 2500);
+                return; // 正确直接赢，不触发后面的战斗逻辑
             } else {
-                dialogueTextElem.innerHTML = `你试探着回答：“${answer}？”<br>橘兔生气地跺脚：“叽叽！！连‘橘子不吃橙子’都不知道！吃我一记愤怒偷袭！”`;
-                battleState.player.hp = Math.max(0, battleState.player.hp - 15);
+                dialogueTextElem.innerHTML = `你试探着回答：“${answer}？”<br>橘兔生气地跺脚：“叽叽！！连暗号都对不上，肯定是坏人！吃我一记愤怒偷袭！”`;
+                battleState.player.hp = Math.max(0, battleState.player.hp - 25); // 偷袭伤害加重
                 updateHpUI();
+                // 接下来会触发战斗界面
             }
-
             setTimeout(() => {
                 battleState.isPlayerTurn = true;
                 dialogueTextElem.innerText = `战斗正式开始！请选择你的战术：\n[攻击] / [防御] / [恢复] / [逃跑]`;
