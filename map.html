@@ -516,7 +516,14 @@
                 // 自动聚焦并全选文字，方便直接打字
                 setTimeout(() => {
                     const input = document.getElementById('rpg-prompt-input');
-                    if(input) { input.focus(); input.select(); }
+                    if(input) { 
+                        input.focus(); 
+                        input.select(); 
+                        // 【核心新增】：支持按下键盘回车键直接确认！
+                        input.onkeydown = (e) => {
+                            if (e.key === 'Enter') confirmBtn.click();
+                        };
+                    }
                 }, 100);
             });
         }
@@ -603,7 +610,9 @@
                     return;
                 }
                 
-                // 🚀 核心修复：支持执行包含 rpgPrompt 的 async 异步更新器！
+                // 🚀 终极防护：确保底层日志数组必定存在，防止代码意外崩溃导致断传
+                if (!town.eventLog) town.eventLog = [];
+                
                 town = await updater(town);
                 if (!town) return; // 如果宝宝中途取消了操作，就安全退出
 
@@ -615,38 +624,6 @@
                     await rpgAlert("🚫 动作已被拦截：你已被小镇管理员拉黑！");
                     return;
                 }
-
-                // 🚀 核心改进：提取刚刚产生的最新日记，并发送到独立表 town_logs
-                if (town.eventLog && town.eventLog.length > 0) {
-                    const latestLog = town.eventLog[town.eventLog.length - 1];
-                    
-                    // 违禁词拦截
-                    let hasBadWord = BANNED_WORDS.some(word => latestLog.includes(word));
-                    if (hasBadWord) {
-                        await rpgAlert("🚫 动作已被拦截：检测到违禁内容！");
-                        return;
-                    }
-
-                    // 写入独立日记表
-                    try {
-                        await fetch(`${SUPABASE_URL}/rest/v1/town_logs`, {
-                            method: 'POST',
-                            headers: {
-                                "apikey": SUPABASE_KEY,
-                                "Authorization": `Bearer ${SUPABASE_KEY}`,
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({ 
-                                content: latestLog, 
-                                player_name: myName || "系统" 
-                            })
-                        });
-                    } catch (e) { console.error("日记上传失败:", e); }
-
-                    // 💡 重点：发完之后清空 town 里的旧日志，防止 town_state 表体积爆炸
-                    town.eventLog = []; 
-                }
-                // ------------------------------------------------
 
                 // --- 🗑️ 核心新增：冰箱食材 3天保质期 + 20个容量上限 自动清理系统 ---
                 if (town.kitchen && town.kitchen.fridge && town.kitchen.fridge.contents) {
@@ -687,23 +664,18 @@
                     // 3. 【核心新增：容量超过 20 强制清理】
                     let overflowCount = 0;
                     if (freshExps.length > 20) {
-                        // 确保按照时间从最新到最旧排列
                         freshExps.sort((a, b) => b.time - a.time);
-                        // 计算溢出了多少个
                         overflowCount = freshExps.length - 20;
-                        // 狠心挥刀：只截取最前面（最新鲜）的 20 个
                         freshExps = freshExps.slice(0, 20);
                     }
 
-                    // 根据最终幸存的时间戳，重构物理食材名单
                     let freshContents = [];
                     freshExps.forEach(exp => freshContents.push(exp.name));
 
-                    // 4. 更新回数据库
                     town.kitchen.fridge.contents = freshContents;
                     town.kitchen.fridge.expirations = freshExps;
 
-                    // 5. 播报日记
+                    // 5. 播报日记（必须在抽取日记前执行，否则无法合并发送！）
                     const nowTimeStr = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                     if (expiredCount > 0) {
                         town.eventLog.push(`[${nowTimeStr}] 🗑️ 警报：冰箱里有 ${expiredCount} 份食材放了超过 3 天发霉了，被小镇卫生除菌系统扔掉啦！`);
@@ -713,6 +685,37 @@
                     }
                 }
                 // ------------------------------------------------
+
+                // 🚀 核心修复：把本次操作产生的所有新日记全部遍历出来，逐条发送到云端！
+                if (town.eventLog && town.eventLog.length > 0) {
+                    for (const logText of town.eventLog) {
+                        // 违禁词拦截
+                        let hasBadWord = BANNED_WORDS.some(word => logText.includes(word));
+                        if (hasBadWord) {
+                            await rpgAlert("🚫 动作已被拦截：检测到违禁内容！");
+                            continue; // 跳过这条毒日记，继续处理下一条
+                        }
+
+                        // 写入独立日记表
+                        try {
+                            await fetch(`${SUPABASE_URL}/rest/v1/town_logs`, {
+                                method: 'POST',
+                                headers: {
+                                    "apikey": SUPABASE_KEY,
+                                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                                    "Content-Type": "application/json"
+                                },
+                                body: JSON.stringify({ 
+                                    content: logText, 
+                                    player_name: myName || "系统" 
+                                })
+                            });
+                        } catch (e) { console.error("日记上传失败:", e); }
+                    }
+
+                    // 💡 重点：确保所有日记安全上云后，再一次性清空底座
+                    town.eventLog = []; 
+                }
 
                 await saveTown(town);
                 await syncTownState();
@@ -1021,32 +1024,42 @@
             }
 
             // --- 滚动体验优化：记录刷新前，用户是不是正在看最底下的最新消息 ---
-            // 如果差距小于 50 像素，说明在最底部
             const isAtBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 50;
 
-            // 移除 slice(-15)，直接渲染传入的所有日志（后端已限制最大500条）
             logBox.innerHTML = logs.map(l => {
                 let text = l;
                 let timeSpan = "";
                 
-                // 用正则提取后端发来的时间戳，比如 "[14:30] "
-                const timeMatch = l.match(/^\[(\d{2}:\d{2})\]\s(.*)/);
+                // 🚀 【强化1：防换行截断】将 .* 改为 [\s\S]*，允许完美兼容带换行符的多行长日记！
+                const timeMatch = l.match(/^\[(\d{2}:\d{2})\]\s([\s\S]*)/);
                 if (timeMatch) {
                     timeSpan = `<span style="color: #778da9; font-size: 11px; margin-right: 6px; font-family: monospace;">[${timeMatch[1]}]</span>`;
-                    text = timeMatch[2]; // 去掉时间戳剩下的正文
+                    text = timeMatch[2]; 
                 }
+
+                // 🚀 【强化2：防隐身代码炸弹】把 AI 乱用的 < > 符号转义为安全文字，防止搞崩整个页面结构！
+                text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                // 🚀 【强化3：还原换行美感】让 AI 写的换行符真正在日记面板上分行展示
+                text = text.replace(/\n/g, '<br>');
 
                 // 判断是否是聊天（找中文冒号）
                 if (text.includes('：')) {
-                    const [name, msg] = text.split('：');
-                    return `<div class="log-entry chat-style">${timeSpan}<b style="color:#FFFACD">${name}</b>: ${msg}</div>`;
+                    const parts = text.split('：');
+                    const name = parts[0];
+                    // 🚀 【强化4：防冒号连环丢字】把切掉的后半段拼回来，防止长句子里有多个冒号被抛弃！
+                    const msg = parts.slice(1).join('：'); 
+                    
+                    // 只有名字长度小于15的，才算做正常的聊天（比如：小橘、Galen）。
+                    // 如果名字超长（比如：🛠️ Galen 戴上报纸帽重新装修啦！变成了），这就不是聊天，恢复普通展示！
+                    if (name.length <= 15) {
+                        return `<div class="log-entry chat-style">${timeSpan}<b style="color:#FFFACD">${name}</b>: ${msg}</div>`;
+                    }
                 }
                 return `<div class="log-entry">${timeSpan}${text}</div>`;
             }).join('');
             
             // --- 智能滚动 ---
-            // 只有当用户原本就在最下面时，新消息来了才自动滚到底。
-            // 这样当宝宝往上翻看历史日记时，就不会被系统 3 秒一次的刷新强行拽下去了！
             if (isAtBottom) {
                 logBox.scrollTop = logBox.scrollHeight;
             }
