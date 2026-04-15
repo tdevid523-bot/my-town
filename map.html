@@ -374,6 +374,7 @@
         <input type="text" id="nickname-input" placeholder="输入你的昵称 (如: 宝宝)">
         <button onclick="handleLogin()">进入小镇</button>
         <button onclick="handleLogout()" style="background: #95a5a6;">离开</button>
+        <button onclick="reviveElf()" style="background: #e74c3c; margin-left: 10px;">♻️ 复活橘兔</button>
         <span id="current-user-display" style="color: #DEB887; margin-left: 15px; font-weight: bold;">[当前未登录]</span>
     </div>
 
@@ -927,8 +928,12 @@
         };
 
         function startElfBattle(reason) {
-            if (window.currentTownState && window.currentTownState.elfDefeated) return; 
-            battleState = { 
+            // 检查你个人是否拥有通行证，且没有超过 12 小时
+            const pData = window.currentTownState?.players[myName];
+            const isDefeated = pData?.elfDefeated && (Date.now() - pData.elfDefeated < 12 * 3600 * 1000);
+            if (isDefeated) return; 
+            
+            battleState = {
                 active: true, isPlayerTurn: false,
                 player: { hp: 100, maxHp: 100, atkRange: [15, 25], healRange: [10, 25], isDefending: false, atkDebuff: 1 }, 
                 jutu: { hp: 150, maxHp: 150, shield: false, tutuBuff: 0, calledBaoBao: false, tutuSummoned: false }
@@ -1117,9 +1122,10 @@
             document.getElementById('battle-actions-group').style.display = 'none';
             document.getElementById('battle-end-group').style.display = 'flex';
             pushUpdate(town => {
-                town.elfDefeated = true; 
+                // 核心：发放个人专属通行证，并打上当前时间戳
+                town.players[myName].elfDefeated = Date.now(); 
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                town.eventLog.push(`[${now}] ⚔️ 大捷！守护精灵【橘兔】在切磋中放行了 ${myName}！全屋封锁解除！`);
+                town.eventLog.push(`[${now}] ⚔️ 突破！守护精灵【橘兔】认可了 ${myName} 的实力，向 TA 开放了 12 小时的私人房间通行证！`);
                 return town;
             });
         }
@@ -1265,6 +1271,20 @@ async function saveTown(newData) {
             myName = null;
             localStorage.removeItem('town_nickname');
             document.getElementById('current-user-display').innerText = `[当前未登录]`;
+        }
+
+        // --- ♻️ 核心新增：一键复活橘兔 (测试专用) ---
+        function reviveElf() {
+            pushUpdate(town => {
+                // 遍历所有人，把所有人的通行证全部撕毁
+                for (let pName in town.players) {
+                    town.players[pName].elfDefeated = null; 
+                }
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] 🌟 魔法闪过，守护精灵【橘兔】满血复活啦！所有人的通行证已失效，必须重新切磋！`);
+                return town;
+            });
+            alert("橘兔已重新上岗！\n现在所有人（包括你和AI）的通行证都被没收了，会被立刻拦截！");
         }
 
         function handleChat() {
@@ -1435,8 +1455,9 @@ async function saveTown(newData) {
                 const threshold = (closestRoom === "小洋房花园") ? 15 : 8; 
                 const newRoom = minDistance < threshold ? closestRoom : "走廊";
 
-                // 【核心新增】：精灵阻挡逻辑
-                if ((newRoom === "主卧" || newRoom === "衣帽间") && !town.elfDefeated) {
+                // 【核心新增】：精灵阻挡逻辑 (每人独立计算，12小时自动重置复活)
+                const isDefeated = p.elfDefeated && (Date.now() - p.elfDefeated < 12 * 3600 * 1000);
+                if ((newRoom === "主卧" || newRoom === "衣帽间") && !isDefeated) {
                     startElfBattle("前方是私人重地，不许进！");
                     return town; // 被拦截，直接退出
                 }
@@ -1911,8 +1932,9 @@ async function saveTown(newData) {
                 // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
                 const newRoom = minDistance < 6 ? closestRoom : "走廊";
                 
-                // 【核心新增】：精灵阻挡逻辑
-                if ((newRoom === "主卧" || newRoom === "衣帽间") && !town.elfDefeated) {
+                // 【核心新增】：精灵阻挡逻辑 (每人独立计算，12小时自动重置复活)
+                const isDefeated = p.elfDefeated && (Date.now() - p.elfDefeated < 12 * 3600 * 1000);
+                if ((newRoom === "主卧" || newRoom === "衣帽间") && !isDefeated) {
                     startElfBattle("前方是私人重地，不许进！");
                     return town; // 被拦截，直接退出
                 }
