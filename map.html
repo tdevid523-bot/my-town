@@ -1018,53 +1018,53 @@
         function updateLogs(logs) {
             const logBox = document.getElementById('event-log');
             
-            if (!logs || logs.length === 0) {
+            // 【防爆装甲 1】：如果数据是空的，或者根本不是数组，安全退出
+            if (!logs || !Array.isArray(logs) || logs.length === 0) {
                 logBox.innerHTML = '<div style="text-align:center; color:#95a5a6; margin-top:20px; font-style:italic;">🏠 家里空空的，快叫 AI 登录回家吧~</div>';
                 return;
             }
 
-            // --- 滚动体验优化：记录刷新前，用户是不是正在看最底下的最新消息 ---
             const isAtBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 50;
 
-            logBox.innerHTML = logs.map(l => {
-                let text = l;
+            logBox.innerHTML = logs.map(rawLog => {
+                // 【防爆装甲 2】：强制转换为纯文本，防止 AI 写入奇怪的数据导致系统崩溃
+                let text = String(rawLog || "");
+                if (!text.trim()) return ""; // 空日志直接跳过
+
                 let timeSpan = "";
-                
-                // 🚀 【强化1：防换行截断】将 .* 改为 [\s\S]*，允许完美兼容带换行符的多行长日记！
-                const timeMatch = l.match(/^\[(\d{2}:\d{2})\]\s([\s\S]*)/);
+                // 【防爆装甲 3】：使用 [\\s\\S]* 完美兼容 AI 写出的带有成百上千个换行符的超级长文
+                const timeMatch = text.match(/^\[(\d{2}:\d{2})\]\s([\s\S]*)/);
                 if (timeMatch) {
                     timeSpan = `<span style="color: #778da9; font-size: 11px; margin-right: 6px; font-family: monospace;">[${timeMatch[1]}]</span>`;
                     text = timeMatch[2]; 
                 }
 
-                // 🚀 【强化2：防隐身代码炸弹】把 AI 乱用的 < > 符号转义为安全文字，防止搞崩整个页面结构！
+                // 【防爆装甲 4】：抹杀所有潜在的 HTML 破坏性标签（防止 AI 乱用 < > 搞崩网页结构）
                 text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-                // 🚀 【强化3：还原换行美感】让 AI 写的换行符真正在日记面板上分行展示
+                
+                // 将安全的换行符还原为网页可见的换行
                 text = text.replace(/\n/g, '<br>');
 
-                // 判断是否是聊天（找中文冒号）
+                // 【防爆装甲 5】：智能识别聊天，并且防止 AI 一句话里用多个冒号导致后半句话丢失
                 if (text.includes('：')) {
                     const parts = text.split('：');
                     const name = parts[0];
-                    // 🚀 【强化4：防冒号连环丢字】把切掉的后半段拼回来，防止长句子里有多个冒号被抛弃！
                     const msg = parts.slice(1).join('：'); 
                     
-                    // 只有名字长度小于15的，才算做正常的聊天（比如：小橘、Galen）。
-                    // 如果名字超长（比如：🛠️ Galen 戴上报纸帽重新装修啦！变成了），这就不是聊天，恢复普通展示！
+                    // 只有名字长度很短（小于15字符），才算是真的在聊天！长篇大论的动作描写直接走普通日记展示！
                     if (name.length <= 15) {
                         return `<div class="log-entry chat-style">${timeSpan}<b style="color:#FFFACD">${name}</b>: ${msg}</div>`;
                     }
                 }
+                
                 return `<div class="log-entry">${timeSpan}${text}</div>`;
             }).join('');
             
-            // --- 智能滚动 ---
             if (isAtBottom) {
                 logBox.scrollTop = logBox.scrollHeight;
             }
         }
-
+        
         // --- ⚔️ 橘兔精灵对战系统 (满血复活版) ---
         let battleState = { 
             active: false, isPlayerTurn: false,
