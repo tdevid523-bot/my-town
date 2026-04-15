@@ -560,33 +560,32 @@
 
         // 2. 核心同步函数（增加了超强报错提示）
         async function syncTownState() {
-            console.log("🚀 [状态检查] 开始连接 Supabase...");
             try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/town_state?id=eq.1`, {
-                    headers: { 
-                        "apikey": SUPABASE_KEY, 
-                        "Authorization": `Bearer ${SUPABASE_KEY}` 
-                    }
+                // 1. 获取玩家坐标和房间状态（来自 town_state 表）
+                const resState = await fetch(`${SUPABASE_URL}/rest/v1/town_state?id=eq.1`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                 });
-
-                if (!response.ok) {
-                    const errorMsg = await response.text();
-                    console.error("❌ [网络错误] 钥匙虽然是对的，但 Supabase 拒绝了请求:", errorMsg);
-                    return;
+                const stateRows = await resState.json();
+                if (stateRows && stateRows.length > 0) {
+                    const town = stateRows[0].data;
+                    renderPlayers(town);
+                    window.currentTownState = town; 
                 }
 
-                const rows = await response.json();
-                console.log("📥 [收到数据]", rows);
-
-                if (rows && rows.length > 0) {
-                    const town = rows[0].data;
-                    renderPlayers(town); // 【修复】：把整个小镇数据传进去
-                    updateLogs(town.eventLog);
-                } else {
-                    console.warn("❓ [空数据] 连上了数据库，但里面没找到 id=1 的那一行数据。");
+                // 2. 🚀 从独立表 town_logs 抓取最新的 50 条日记
+                // order=created_at.desc 表示拿最新的，limit=50 限制数量，防止前端卡顿
+                const resLogs = await fetch(`${SUPABASE_URL}/rest/v1/town_logs?order=created_at.desc&limit=50`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const logRows = await resLogs.json();
+                
+                if (logRows && logRows.length > 0) {
+                    // 获取后反转顺序，让最新的消息出现在日记框最下面
+                    const logs = logRows.map(row => row.content).reverse();
+                    updateLogs(logs);
                 }
             } catch (err) {
-                console.error("🚫 [系统崩溃] 脚本运行出错:", err);
+                console.error("🚫 同步数据失败:", err);
             }
         }
 

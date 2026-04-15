@@ -345,21 +345,35 @@ function createMcpServer() {
         const now = Date.now();
         let changed = false;
 
-        const addLog = (msg) => {
-            // --- 🛡️ 云端后台词汇净化盾 ---
-            const BANNED_WORDS = ["尿床", "屎", "尿", "滚"]; // 在这里填入屏蔽词
+        const addLog = async (msg) => {
+            const BANNED_WORDS = ["尿床", "屎", "尿", "滚"];
             let cleanMsg = msg;
             for (const word of BANNED_WORDS) {
                 if (cleanMsg.includes(word)) {
                     console.warn(`🛡️ 拦截到恶心违禁词：${word}`);
-                    cleanMsg = cleanMsg.split(word).join("马赛克"); // 把恶心词汇全部打码
+                    cleanMsg = cleanMsg.split(word).join("马赛克");
                 }
             }
 
             const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
-            town.eventLog.push(`[${timeStr}] ${cleanMsg}`);
-            if (town.eventLog.length > 500) town.eventLog = town.eventLog.slice(-500);
-            changed = true;
+            const fullContent = `[${timeStr}] ${cleanMsg}`;
+
+            try {
+                // 🚀 核心改进：日志不再塞进 JSON，而是直接发往独立表 town_logs 插入新行
+                await fetch(`${SUPABASE_URL}/rest/v1/town_logs`, {
+                    method: 'POST',
+                    headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ content: fullContent, player_name: pName || "系统" })
+                });
+            } catch (e) {
+                console.error("❌ 日记同步至独立表失败:", e);
+            }
+            // 依然触发状态保存标识，但不再往 town 对象里塞日志，防止体积爆炸
+            changed = true; 
         };
 
         // --- 🍊 核心新增：橘子树生长逻辑 ---
