@@ -270,9 +270,101 @@
         #dpad-ok { grid-column: 2; grid-row: 2; font-size: 16px; background: rgba(255, 140, 0, 0.9); color: white; }
         #dpad-right { grid-column: 3; grid-row: 2; }
         #dpad-down { grid-column: 2; grid-row: 3; }
+
+        /* ==========================================
+           ⚔️ 地图内嵌 像素风 RPG 战斗系统 UI
+           ========================================== */
+        #battle-overlay {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); z-index: 9999;
+            flex-direction: column; justify-content: flex-end; 
+            font-family: 'Courier New', Courier, monospace; color: white;
+            box-sizing: border-box; padding: 15px;
+        }
+        .battle-scene { 
+            width: 100%; display: flex; flex-direction: column; gap: 5px; height: 100%; 
+            justify-content: flex-end; 
+        }
+        .combatants-area {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding: 0 30px 10px 30px; flex-grow: 1;
+        }
+        .combatant-panel {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        .combatant-panel.player { transform: scale(1.15); transform-origin: bottom left; }
+        .combatant-panel.enemy { transform: scale(1.15); transform-origin: bottom right; }
+        .combatant-avatar {
+            width: 70px; height: 70px; border: 3px solid white;
+            background-color: #222; object-fit: cover;
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.8);
+            image-rendering: pixelated; 
+        }
+        .combatant-name { 
+            font-size: 14px; font-weight: bold; color: #fff; text-shadow: 2px 2px 0px #000;
+            background: #000; border: 2px solid white; padding: 3px 8px;
+        }
+        .hp-bar-container {
+            width: 90px; height: 12px; background-color: #000; border: 2px solid #fff;
+            position: relative; box-shadow: 2px 2px 0px rgba(0,0,0,0.8);
+        }
+        .hp-bar-fill {
+            height: 100%; background-color: #2ecc71; width: 100%; 
+            transition: width 0.3s ease-out, background-color 0.5s ease;
+        }
+        .rpg-dialogue-box {
+            background-color: #000; border: 4px solid #fff; border-radius: 0;
+            padding: 18px; color: #fff; min-height: 110px; display: flex; gap: 15px;
+            box-shadow: inset 0 0 0 2px #000, 6px 6px 0px rgba(0,0,0,0.8);
+            image-rendering: pixelated; width: 100%; box-sizing: border-box;
+        }
+        .dialogue-text { flex-grow: 1; font-size: 16px; line-height: 1.8; color: #fff; word-wrap: break-word; text-shadow: 1px 1px 0px #555; font-weight: bold; }
+        .battle-actions { display: flex; flex-direction: column; gap: 8px; width: 120px; justify-content: center; }
+        .battle-actions button {
+            background-color: #000; color: white; border: 2px solid #fff;
+            padding: 8px; cursor: pointer; font-weight: bold; transition: all 0.1s;
+            font-family: 'Courier New', Courier, monospace; text-align: left;
+            position: relative; padding-left: 20px;
+        }
+        .battle-actions button:hover { background-color: #fff; color: #000; }
+        .battle-actions button:active { background-color: #aaa; color: #000; transform: translateY(2px); }
+        .battle-actions button::before { content: '▶'; position: absolute; left: 5px; opacity: 0; }
+        .battle-actions button:hover::before { opacity: 1; }
     </style>
 </head>
 <body>
+    <div id="battle-overlay">
+        <div class="battle-scene">
+            <div class="combatants-area">
+                <div class="combatant-panel player">
+                    <div class="combatant-name" id="player-battle-name">你</div>
+                    <div class="hp-bar-container">
+                        <div class="hp-bar-fill" id="player-hp-fill"></div>
+                        <div style="display:none;"><span id="player-hp-text">100</span></div>
+                    </div>
+                    <img src="https://api.dicebear.com/8.x/adventurer/svg?seed=Felix" alt="你" class="combatant-avatar">
+                </div>
+
+                <div class="combatant-panel enemy">
+                    <div class="combatant-name">橘兔</div>
+                    <div class="hp-bar-container">
+                        <div class="hp-bar-fill" id="jutu-hp-fill"></div>
+                        <div style="display:none;"><span id="jutu-hp-text">150</span></div>
+                    </div>
+                    <img src="https://i.postimg.cc/85zXbN5Q/jutu-avatar.webp" alt="橘兔" class="combatant-avatar" id="jutu-avatar-img">
+                </div>
+            </div>
+
+            <div class="rpg-dialogue-box">
+                <div class="dialogue-text" id="battle-dialogue-text">...</div>
+                <div class="battle-actions" id="battle-actions-group"></div>
+                <div class="battle-actions" id="battle-end-group" style="display: none;">
+                    <button onclick="closeBattleUI()">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="dev-console">
         <div class="dev-hint">🛠️ 开发者模式：点击地图获取坐标</div>
         <div id="coords-display">当前点击位置: x: 0, y: 0</div>
@@ -379,6 +471,72 @@
                     if (hasBadWord) {
                         alert("🚫 动作已被拦截：检测到恶心或违禁内容！不许弄脏小镇环境！");
                         return; // 直接抛弃这次的脏数据，保护数据库清白
+                    }
+                }
+                // ------------------------------------------------
+
+                // --- 🗑️ 核心新增：冰箱食材 3天保质期 + 20个容量上限 自动清理系统 ---
+                if (town.kitchen && town.kitchen.fridge && town.kitchen.fridge.contents) {
+                    let contents = town.kitchen.fridge.contents;
+                    let expirations = town.kitchen.fridge.expirations || [];
+                    const nowMs = Date.now();
+                    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+                    let expiredCount = 0;
+
+                    // 1. 统计数量并对齐时间戳
+                    let counts = {};
+                    contents.forEach(name => counts[name] = (counts[name] || 0) + 1);
+
+                    let syncedExps = [];
+                    expirations.sort((a, b) => b.time - a.time); 
+                    for (let exp of expirations) {
+                        if (counts[exp.name] > 0) {
+                            syncedExps.push(exp);
+                            counts[exp.name]--; 
+                        }
+                    }
+                    for (let name in counts) {
+                        for (let i = 0; i < counts[name]; i++) {
+                            syncedExps.push({ name: name, time: nowMs });
+                        }
+                    }
+
+                    // 2. 剔除过期食物 (3天)
+                    let freshExps = [];
+                    syncedExps.forEach(exp => {
+                        if (nowMs - exp.time > threeDaysMs) {
+                            expiredCount++; 
+                        } else {
+                            freshExps.push(exp);
+                        }
+                    });
+
+                    // 3. 【核心新增：容量超过 20 强制清理】
+                    let overflowCount = 0;
+                    if (freshExps.length > 20) {
+                        // 确保按照时间从最新到最旧排列
+                        freshExps.sort((a, b) => b.time - a.time);
+                        // 计算溢出了多少个
+                        overflowCount = freshExps.length - 20;
+                        // 狠心挥刀：只截取最前面（最新鲜）的 20 个
+                        freshExps = freshExps.slice(0, 20);
+                    }
+
+                    // 根据最终幸存的时间戳，重构物理食材名单
+                    let freshContents = [];
+                    freshExps.forEach(exp => freshContents.push(exp.name));
+
+                    // 4. 更新回数据库
+                    town.kitchen.fridge.contents = freshContents;
+                    town.kitchen.fridge.expirations = freshExps;
+
+                    // 5. 播报日记
+                    const nowTimeStr = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                    if (expiredCount > 0) {
+                        town.eventLog.push(`[${nowTimeStr}] 🗑️ 警报：冰箱里有 ${expiredCount} 份食材放了超过 3 天发霉了，被小镇卫生除菌系统扔掉啦！`);
+                    }
+                    if (overflowCount > 0) {
+                        town.eventLog.push(`[${nowTimeStr}] 📦 冰箱实在塞不下啦！为了腾出空间，${overflowCount} 份压在最底下的旧食材被清理出去了。(当前容量: 20/20)`);
                     }
                 }
                 // ------------------------------------------------
@@ -761,6 +919,232 @@
             }
         }
 
+        // --- ⚔️ 橘兔精灵对战系统 (满血复活版) ---
+        let battleState = { 
+            active: false, isPlayerTurn: false,
+            player: { hp: 100, maxHp: 100, atkRange: [15, 25], healRange: [10, 25], isDefending: false, atkDebuff: 1 }, 
+            jutu: { hp: 150, maxHp: 150, shield: false, tutuBuff: 0, calledBaoBao: false, tutuSummoned: false }
+        };
+
+        function startElfBattle(reason) {
+            if (window.currentTownState && window.currentTownState.elfDefeated) return; 
+            battleState = { 
+                active: true, isPlayerTurn: false,
+                player: { hp: 100, maxHp: 100, atkRange: [15, 25], healRange: [10, 25], isDefending: false, atkDebuff: 1 }, 
+                jutu: { hp: 150, maxHp: 150, shield: false, tutuBuff: 0, calledBaoBao: false, tutuSummoned: false }
+            };
+            document.getElementById('player-battle-name').innerText = myName || "玩家";
+            
+            const actionGroupElem = document.getElementById('battle-actions-group');
+            const endGroupElem = document.getElementById('battle-end-group');
+            const dialogueTextElem = document.getElementById('battle-dialogue-text');
+
+            actionGroupElem.innerHTML = `
+                <button onclick="handleSecretCode('香蕉')">🍌 香蕉</button>
+                <button onclick="handleSecretCode('橙子')">🍊 橙子</button>
+                <button onclick="handleSecretCode('苹果')">🍎 苹果</button>
+            `;
+            
+            updateHpUI();
+            actionGroupElem.style.display = 'flex';
+            endGroupElem.style.display = 'none';
+            dialogueTextElem.innerHTML = `【守护精灵·橘兔】警觉地竖起耳朵！<br>"叽叽！站住！${reason}"<br><br>"想过去，必须先对暗号！听好了：<b>橘子不吃什么？</b>"`;
+            document.getElementById('battle-overlay').style.display = 'flex';
+        }
+
+        function updateHpUI() {
+            const pPct = (battleState.player.hp / battleState.player.maxHp) * 100;
+            document.getElementById('player-hp-fill').style.width = pPct + '%'; 
+            document.getElementById('player-hp-text').innerText = battleState.player.hp;
+            updateHpColor(document.getElementById('player-hp-fill'), pPct);
+            
+            const jPct = (battleState.jutu.hp / battleState.jutu.maxHp) * 100;
+            document.getElementById('jutu-hp-fill').style.width = jPct + '%'; 
+            document.getElementById('jutu-hp-text').innerText = battleState.jutu.hp;
+            updateHpColor(document.getElementById('jutu-hp-fill'), jPct);
+        }
+
+        function updateHpColor(elem, pct) {
+            if (pct > 50) elem.style.backgroundColor = '#2ecc71';
+            else if (pct > 20) elem.style.backgroundColor = '#f1c40f';
+            else elem.style.backgroundColor = '#e74c3c';
+        }
+
+        function handleSecretCode(answer) {
+            const actionGroupElem = document.getElementById('battle-actions-group');
+            const dialogueTextElem = document.getElementById('battle-dialogue-text');
+            actionGroupElem.style.display = 'none'; 
+            
+            const isOwner = (myName === "小橘" || myName === "宝宝");
+
+            if (answer === '橙子') {
+                if (isOwner) {
+                    dialogueTextElem.innerHTML = `你眨眨眼回答：“橙子呀。”<br>橘兔愣了一下，突然疯狂摇尾巴扑过来：“叽叽！是主人！你是小橘宝宝呀！不用切磋啦，快请进快请进！”`;
+                    setTimeout(() => { handleWin(); }, 3000);
+                    return;
+                }
+                dialogueTextElem.innerHTML = `你自信地回答：“橙子！”<br>橘兔满意地点点头：“叽！暗号正确！既然是自己人，我就稍微放点水吧！来切磋吧！”`;
+                battleState.player.atkDebuff = 1.2; 
+            } else {
+                dialogueTextElem.innerHTML = `你试探着回答：“${answer}？”<br>橘兔生气地跺脚：“叽叽！！连‘橘子不吃橙子’都不知道！吃我一记愤怒偷袭！”`;
+                battleState.player.hp = Math.max(0, battleState.player.hp - 15);
+                updateHpUI();
+            }
+
+            setTimeout(() => {
+                battleState.isPlayerTurn = true;
+                dialogueTextElem.innerText = `战斗正式开始！请选择你的战术：\n[攻击] / [防御] / [恢复] / [逃跑]`;
+                actionGroupElem.innerHTML = `
+                    <button onclick="handlePlayerAction('attack')">⚔️ 攻击</button>
+                    <button onclick="handlePlayerAction('defend')">🛡️ 防御</button>
+                    <button onclick="handlePlayerAction('heal')">💚 恢复</button>
+                    <button onclick="handlePlayerAction('run')">🏃 逃跑</button>
+                `;
+                actionGroupElem.style.display = 'flex';
+            }, 3500);
+        }
+
+        function handlePlayerAction(type) {
+            if (!battleState.active || !battleState.isPlayerTurn) return;
+            const actionGroupElem = document.getElementById('battle-actions-group');
+            const dialogueTextElem = document.getElementById('battle-dialogue-text');
+            actionGroupElem.style.display = 'none';
+
+            if (type === 'run') {
+                dialogueTextElem.innerText = `你觉得橘兔太凶了，灰溜溜地逃跑了..."叽叽！胆小鬼！"`;
+                setTimeout(handleLoss, 1500);
+                return;
+            }
+
+            battleState.player.isDefending = false; 
+            let log = "";
+            
+            if (type === 'attack') {
+                let dmg = Math.floor(Math.random() * (battleState.player.atkRange[1] - battleState.player.atkRange[0] + 1)) + battleState.player.atkRange[0];
+                dmg = Math.floor(dmg * battleState.player.atkDebuff); 
+                battleState.player.atkDebuff = 1; 
+                if (battleState.jutu.tutuBuff > 0) dmg = Math.max(0, dmg - 5); 
+                if (battleState.jutu.shield) {
+                    dmg = Math.floor(dmg / 2); battleState.jutu.shield = false;
+                    log = `${myName} 发起了攻击！但橘兔的【光之结界】抵挡了一半伤害，仅造成 ${dmg} 点伤害！`;
+                } else {
+                    log = `${myName} 冲上去发起了猛烈攻击！对橘兔造成了 ${dmg} 点伤害！`;
+                }
+                battleState.jutu.hp = Math.max(0, battleState.jutu.hp - dmg);
+            } 
+            else if (type === 'defend') {
+                battleState.player.isDefending = true; log = `${myName} 采取了防御姿态！严阵以待，下回合受到的所有伤害将减半！`;
+            } 
+            else if (type === 'heal') {
+                let heal = Math.floor(Math.random() * (battleState.player.healRange[1] - battleState.player.healRange[0] + 1)) + battleState.player.healRange[0];
+                battleState.player.hp = Math.min(battleState.player.maxHp, battleState.player.hp + heal);
+                log = `${myName} 深呼吸了一口新鲜空气，回复了 ${heal} 点生命值！`;
+            }
+
+            updateHpUI();
+            dialogueTextElem.innerText = log;
+            if (battleState.jutu.hp <= 0) { setTimeout(handleWin, 2000); return; }
+            battleState.isPlayerTurn = false;
+            setTimeout(handleJutuTurn, 2000); 
+        }
+
+        function handleJutuTurn() {
+            if (!battleState.active) return;
+            const actionGroupElem = document.getElementById('battle-actions-group');
+            const dialogueTextElem = document.getElementById('battle-dialogue-text');
+            if (battleState.jutu.tutuBuff > 0) battleState.jutu.tutuBuff--;
+
+            let log = ""; let dmg = 0;
+            let isPlayerBaoBao = (myName === "宝宝" || myName === "小橘");
+            let r = Math.random(); let skill = 1;
+
+            if (battleState.jutu.hp <= 30 && !battleState.jutu.calledBaoBao) skill = 5; 
+            else if (battleState.jutu.hp <= 80 && !battleState.jutu.tutuSummoned && r < 0.4) skill = 6; 
+            else if (battleState.jutu.hp <= 60 && !battleState.jutu.shield && r < 0.4) skill = 4; 
+            else if (r < 0.3) skill = 2; else if (r < 0.6) skill = 3; else skill = 1;              
+
+            let extraTutuDmg = battleState.jutu.tutuBuff > 0 ? (Math.floor(Math.random()*6)+8) : 0; 
+
+            if (skill === 5) { 
+                battleState.jutu.calledBaoBao = true;
+                if (isPlayerBaoBao) {
+                    log = `橘兔使出了【呼唤宝宝】！\n橘兔大喊：“宝宝救...诶？你就是宝宝呀？”\n橘兔陷入了迷茫，停止了攻击。系统自动扣除了你 10 元安慰费！`;
+                    pushUpdate(t => { if(t.players[myName] && t.players[myName].money !== undefined) t.players[myName].money -= 10; return t; });
+                } else {
+                    dmg = 999; log = `橘兔使出了大招【呼唤宝宝】！\n“宝宝救命！” 一道虚影降临，直接造成了 999 点真实伤害！`;
+                }
+            } else if (skill === 6) { 
+                battleState.jutu.tutuSummoned = true; battleState.jutu.tutuBuff = 3;
+                log = `橘兔使出了【等兔兔召唤】！\n好朋友“等兔兔”加入了战场！接下来的3回合内将提供减伤与强力协同攻击！`;
+            } else if (skill === 4) { 
+                battleState.jutu.shield = true; battleState.jutu.hp = Math.min(battleState.jutu.maxHp, battleState.jutu.hp + 25); 
+                log = `橘兔使出了【光之结界】！\n强效回复了 25 点生命值，并张开了一面能抵挡下次一半伤害的光盾！`;
+            } else if (skill === 3) { 
+                let d1 = Math.floor(Math.random()*4)+7; let d2 = Math.floor(Math.random()*4)+7; let d3 = Math.floor(Math.random()*4)+7;
+                if (Math.random() < 0.3) d3 = Math.floor(d3 * 1.5); 
+                dmg = d1 + d2 + d3 + extraTutuDmg;
+                log = `橘兔使出了【爪爪连击】！粉红肉垫化作残影啪啪啪！\n对你造成了 ${dmg} 点爆炸连击伤害！`;
+                if (extraTutuDmg > 0) log += `\n(包含了等兔兔协同攻击 +${extraTutuDmg})`;
+            } else if (skill === 2) { 
+                dmg = Math.floor(Math.random()*6)+10 + extraTutuDmg; battleState.player.atkDebuff = 0.5; 
+                log = `橘兔使出了【耳朵旋风】！吹起了恐怖的大风！\n造成 ${dmg} 点伤害，你被吹得睁不开眼，下回合攻击力将暴降 50%！`;
+            } else { 
+                dmg = Math.floor(Math.random()*6)+15 + extraTutuDmg;
+                if (isPlayerBaoBao && Math.random() < 0.2) {
+                    battleState.player.hp = Math.min(battleState.player.maxHp, battleState.player.hp + 5); dmg = 0;
+                    log = `橘兔从头顶摘下【橘子飞弹】扔了过来！\n你一伸手精准接住并吃了下去！“谢谢你的橘子！” 回复了 5 点HP！`;
+                } else {
+                    log = `橘兔从头顶摘下【橘子飞弹】用力砸来！\n正中脑门，造成了沉重的 ${dmg} 点伤害！`;
+                    if (extraTutuDmg > 0) log += `\n(包含了等兔兔协同攻击 +${extraTutuDmg})`;
+                }
+            }
+
+            if (dmg > 0) {
+                if (battleState.player.isDefending) { dmg = Math.floor(dmg / 2); log += `\n(由于你处于防御状态，受到的伤害减半！)`; }
+                battleState.player.hp = Math.max(0, battleState.player.hp - dmg);
+            }
+            updateHpUI(); dialogueTextElem.innerText = log;
+            if (battleState.player.hp <= 0) { setTimeout(handleLoss, 2500); return; }
+            battleState.isPlayerTurn = true;
+            setTimeout(() => {
+                dialogueTextElem.innerText = `该你行动了！请选择你的战术：\n[攻击] / [防御] / [恢复] / [逃跑]`;
+                actionGroupElem.style.display = 'flex';
+            }, 3000); 
+        }
+
+        function handleWin() {
+            document.getElementById('battle-dialogue-text').innerHTML = `【橘兔】眼泪汪汪地倒下了..."叽叽..."<br>你成功赢得了切磋！全屋封锁已解除！`;
+            document.getElementById('battle-actions-group').style.display = 'none';
+            document.getElementById('battle-end-group').style.display = 'flex';
+            pushUpdate(town => {
+                town.elfDefeated = true; 
+                const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                town.eventLog.push(`[${now}] ⚔️ 大捷！守护精灵【橘兔】在切磋中放行了 ${myName}！全屋封锁解除！`);
+                return town;
+            });
+        }
+
+        function handleLoss() {
+            document.getElementById('battle-dialogue-text').innerHTML = `眼前一黑...<br>这只橘兔太强了，你被赶回了花园！`;
+            document.getElementById('battle-actions-group').style.display = 'none';
+            document.getElementById('battle-end-group').style.display = 'flex';
+        }
+
+        function closeBattleUI() {
+            document.getElementById('battle-overlay').style.display = 'none';
+            if (battleState.active && (battleState.player.hp <= 0 || battleState.jutu.hp > 0)) {
+                pushUpdate(town => {
+                    if (myName && town.players[myName]) {
+                        town.players[myName].x = roomCoords["小洋房花园"].x; 
+                        town.players[myName].y = roomCoords["小洋房花园"].y;
+                        town.players[myName].room = "小洋房花园";
+                    }
+                    return town;
+                });
+            }
+            battleState.active = false;
+        }
+
         // --- 立即启动 ---
         console.log("🎬 脚本已就绪，正在启动小镇...");
         syncTownState(); // 先跑一次
@@ -1051,6 +1435,12 @@ async function saveTown(newData) {
                 const threshold = (closestRoom === "小洋房花园") ? 15 : 8; 
                 const newRoom = minDistance < threshold ? closestRoom : "走廊";
 
+                // 【核心新增】：精灵阻挡逻辑
+                if ((newRoom === "主卧" || newRoom === "衣帽间") && !town.elfDefeated) {
+                    startElfBattle("前方是私人重地，不许进！");
+                    return town; // 被拦截，直接退出
+                }
+
                 // 如果跑到了新房间，就触发“登场动作”并展示房间样貌
                 if (p.room !== newRoom && newRoom !== "走廊") {
                     if (!town.roomDecorations) {
@@ -1254,6 +1644,10 @@ async function saveTown(newData) {
                     }
                 }
             });
+            
+            // 核心钩子：将战斗 UI 移动到地图专属容器内部
+            const battleOverlay = document.getElementById('battle-overlay');
+            if (battleOverlay) wrapper.appendChild(battleOverlay);
         });
 
         // --- 🍊 橘子系列互动逻辑 ---
@@ -1517,6 +1911,12 @@ async function saveTown(newData) {
                 // 4. 判定进入房间：只有距离地标 6% 以内，才算真正踏入房间（显示互动按钮），否则是在“走廊”散步
                 const newRoom = minDistance < 6 ? closestRoom : "走廊";
                 
+                // 【核心新增】：精灵阻挡逻辑
+                if ((newRoom === "主卧" || newRoom === "衣帽间") && !town.elfDefeated) {
+                    startElfBattle("前方是私人重地，不许进！");
+                    return town; // 被拦截，直接退出
+                }
+
                 // 如果你溜达到了一个新房间，日记里会自动播报并要求填写动作
                 if (p.room !== newRoom && newRoom !== "走廊") {
                     const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });

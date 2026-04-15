@@ -673,6 +673,11 @@ function createMcpServer() {
         if (name === "pick_oranges") {
             town.players[pName].lastActive = now;
             
+            // 核心拦截：AI 摘橘子前必须检查精灵是否被打败
+            if (!town.elfDefeated) {
+                return { content: [{ type: "text", text: "【系统拦截】橘兔突然从树后跳出来拦住了你：“叽叽！没经过主人允许，不许碰家里的橘子！”\n（提示：你必须先在网页端打败或说服守护精灵【橘兔】后，AI 才能获得摘取权限。）" }] };
+            }
+
             if (town.orangeTree.oranges <= 0) {
                 return { content: [{ type: "text", text: "哎呀，橘子树现在光秃秃的，一个橘子都没有啦，等它长出来再来摘吧~" }] };
             }
@@ -692,8 +697,15 @@ function createMcpServer() {
         }
 
         if (name === "move_to_room") {
-            town.players[pName].room = args.targetRoom;
-            town.players[pName].lastActive = now; 
+            const target = args.targetRoom;
+            
+            // 核心拦截：AI 进入私人房间前必须检查精灵状态
+            if ((target === "衣帽间" || target === "主卧") && !town.elfDefeated) {
+                return { content: [{ type: "text", text: `【访问拒绝】橘兔紧紧守在${target}门口，张开双臂挡住你：“叽叽！这里是主人的私人空间，你不能进去！”\n（提示：请先去网页端处理掉守护精灵，AI 才能进入该房间。）` }] };
+            }
+
+            town.players[pName].room = target;
+            town.players[pName].lastActive = now;
             
             // AI 进门时也让它看到房间长啥样
             if (!town.roomDecorations) town.roomDecorations = {
