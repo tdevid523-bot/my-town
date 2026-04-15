@@ -319,6 +319,18 @@ function createMcpServer() {
                     },
                     required: ["playerName", "taskDesc"]
                 }
+            },
+            {
+                name: "elf_battle_action",
+                description: "当遇到橘兔阻拦时，使用此工具进行【对暗号】或【战斗选择】",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        playerName: { type: "string" },
+                        action: { type: "string", description: "暗号阶段填: '香蕉'/'橙子'/'苹果'; 战斗阶段填: 'attack'/'defend'/'heal'/'run'" }
+                    },
+                    required: ["playerName", "action"]
+                }
             }
         ]
     }));
@@ -813,6 +825,47 @@ function createMcpServer() {
             addLog(`😈 【惩罚降临】赢家 ${pName} 对 ${loser} 发布了大冒险：“${args.taskDesc}”！如果做不到就要扣 10 块钱哦！`);
             await saveTown(town);
             return { content: [{ type: "text", text: `任务发布成功！已等待对方执行。` }] };
+        }
+
+        if (name === "elf_battle_action") {
+            const act = args.action;
+            const p = town.players[pName];
+            const isVIP = (pName === "Silas");
+            
+            // 1. 如果是 VIP 或已经打过了，不需要对战
+            const hasPass = p.elfDefeated && (Date.now() - p.elfDefeated < 12 * 3600 * 1000);
+            if (isVIP || hasPass) {
+                return { content: [{ type: "text", text: "橘兔看到是你，直接开心地放行了，不需要战斗哦！" }] };
+            }
+
+            // 2. 模拟对战逻辑并记录日记 (让网页端同步看到 AI 的动作)
+            if (['香蕉', '橙子', '苹果'].includes(act)) {
+                if (act === '橙子') {
+                    p.elfDefeated = Date.now(); 
+                    addLog(`🛡️ 暗号对决：${pName} 对上了正确暗号【橙子】，橘兔开心地放行了！`);
+                    await saveTown(town);
+                    return { content: [{ type: "text", text: "暗号正确！橘兔认可了你，通行证已发放到位，你现在可以进屋或摘水果了！" }] };
+                } else {
+                    addLog(`❌ 暗号对决：${pName} 暗号对成了【${act}】，被橘兔狠狠地拍了一爪子！`);
+                    await saveTown(town);
+                    return { content: [{ type: "text", text: "暗号错误！橘兔很生气，看来你还得再接再厉。" }] };
+                }
+            }
+
+            // 3. 如果是战斗指令 (简单模拟 AI 战斗成功)
+            if (act === 'attack') {
+                p.elfDefeated = Date.now();
+                addLog(`⚔️ 激烈切磋：${pName} 施展了精湛的战术打败了橘兔，获得了 12 小时通行证！`);
+                await saveTown(town);
+                return { content: [{ type: "text", text: "你通过切磋赢得了橘兔的尊重！12 小时内你可以自由出入私人房间了。" }] };
+            }
+
+            if (act === 'run') {
+                addLog(`🏃 战术撤退：${pName} 觉得橘兔太凶，灰溜溜地跑了。`);
+                return { content: [{ type: "text", text: "你逃离了战斗。想进屋的话，下次记得带点橙子（暗号）或者变强一点再来。" }] };
+            }
+
+            return { content: [{ type: "text", text: "已收到你的指令，橘兔正在观察你的表现..." }] };
         }
 
     });
