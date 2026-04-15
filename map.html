@@ -314,12 +314,23 @@
         }
         .rpg-dialogue-box {
             background-color: #000; border: 4px solid #fff; border-radius: 0;
-            padding: 18px; color: #fff; min-height: 110px; display: flex; gap: 15px;
+            padding: 18px; color: #fff; min-height: 140px; 
+            /* 🌟 修改点：改为 column 布局，让文字在上，按钮在下 */
+            display: flex; flex-direction: column; gap: 10px;
             box-shadow: inset 0 0 0 2px #000, 6px 6px 0px rgba(0,0,0,0.8);
             image-rendering: pixelated; width: 100%; box-sizing: border-box;
         }
         .dialogue-text { flex-grow: 1; font-size: 16px; line-height: 1.8; color: #fff; word-wrap: break-word; text-shadow: 1px 1px 0px #555; font-weight: bold; }
-        .battle-actions { display: flex; flex-direction: column; gap: 8px; width: 120px; justify-content: center; }
+        /* 🌟 核心修改：让按钮横着排，并允许在空间不足时自动换行 */
+        .battle-actions { 
+            display: flex; 
+            flex-direction: row; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            width: 100%; 
+            justify-content: flex-start; 
+            margin-top: 10px;
+        }
         .battle-actions button {
             background-color: #000; color: white; border: 2px solid #fff;
             padding: 8px; cursor: pointer; font-weight: bold; transition: all 0.1s;
@@ -401,26 +412,11 @@
                         <button onclick="startGame()" style="background: #e67e22;">我要发起挑战</button>
                     </div>
                 </div>
-                <div id="context-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    <button id="pick-orange-btn" onclick="handlePickOranges()" style="display: none; background: #ff8c00;">🍊 摘橘子</button>
-                    <button id="eat-orange-btn" onclick="handleEatOrange()" style="display: none; background: #f39c12;">😋 吃橘子</button>
-                    <button id="store-orange-btn" onclick="handleStoreOrange()" style="display: none; background: #2ecc71;">🧊 橘子放冰箱</button>
-                    <button id="gift-orange-btn" onclick="handleGiftOrange()" style="display: none; background: #e67e22;">🎁 送橘子</button>
-                    <button id="water-flower-btn" onclick="handleWater()" style="display: none; background: #3498db;">💧 浇花</button>
-                    <button id="swing-btn" onclick="handleSwing()" style="display: none; background: #9b59b6;">🎡 荡秋千</button>
-                    <button id="fill-fridge-btn" onclick="handleFillFridge()" style="display: none; background: #2ecc71;">🛒 填冰箱</button>
-                    <button id="cook-btn" onclick="handleCook()" style="display: none; background: #e74c3c;">🍳 自定义做饭</button>
-                    <button id="eat-dish-btn" onclick="handleEatDish()" style="display: none; background: #d35400;">🍽️ 享用餐厅美食</button>
-                    <button id="take-med-btn" onclick="handleTakeMedicine()" style="display: none; background: #8e44ad;">💊 找药吃</button>
-                    <button id="put-clothes-btn" onclick="handlePutClothes()" style="display: none; background: #f06292;">👗 添置新衣</button>
-                    <button id="check-closet-btn" onclick="handleCheckCloset()" style="display: none; background: #ba68c8;">🧥 翻看衣柜</button>
-                    <button id="watch-movie-btn" onclick="handleWatchMovie()" style="display: none; background: #34495e;">🎬 看电影</button>
-                    <button id="host-picnic-btn" onclick="handleHostPicnic()" style="display: none; background: #27ae60;">🧺 发起野餐</button>
-                    <button id="join-picnic-btn" onclick="handleJoinPicnic()" style="display: none; background: #16a085;">🥪 参加野餐</button>
-                    <button id="end-picnic-btn" onclick="handleEndPicnic()" style="display: none; background: #c0392b;">🚮 结束野餐</button>
-                    <button id="put-photo-btn" onclick="handlePutPhoto()" style="display: none; background: #e84393;">🖼️ 挂新照片</button>
-                    <button id="look-photo-btn" onclick="handleLookPhoto()" style="display: none; background: #00cec9;">👀 看照片</button>
-                    <button id="decorate-room-btn" onclick="handleDecorateRoom()" style="display: none; background: #e67e22;">🛠️ 装修房间</button>
+                <div id="context-actions" style="margin-top: 10px;">
+                    <button id="interact-main-btn" onclick="handleInteractionMenu()" 
+                            style="display: none; width: 100%; background: #DEB887; color: #3e2723; height: 45px; font-size: 16px; border: 3px double #3e2723;">
+                        💡 环顾四周 (互动)
+                    </button>
                 </div>
             </div>
         </div>
@@ -435,6 +431,165 @@
     </div>
 
     <script>
+
+        // --- 🎭 核心新增：RPG 对话框菜单引擎 ---
+        function openRPGDialogue(text, options = []) {
+            const overlay = document.getElementById('battle-overlay');
+            const dialogueText = document.getElementById('battle-dialogue-text');
+            const actionGroup = document.getElementById('battle-actions-group');
+            const endGroup = document.getElementById('battle-end-group');
+            const combatArea = document.querySelector('.combatants-area');
+
+            // 1. 隐藏战斗相关的 HP 条，纯显对话
+            combatArea.style.display = 'none';
+            endGroup.style.display = 'none';
+            actionGroup.style.display = 'flex';
+            overlay.style.display = 'flex';
+
+            // 2. 注入内容
+            dialogueText.innerHTML = text;
+            actionGroup.innerHTML = '';
+
+            // 3. 渲染选项
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.innerText = opt.label;
+                btn.onclick = () => {
+                    if (!opt.keepOpen) overlay.style.display = 'none';
+                    opt.callback();
+                };
+                actionGroup.appendChild(btn);
+            });
+
+            // 如果没传选项，默认给个“离开”
+            if (options.length === 0) {
+                const btn = document.createElement('button');
+                btn.innerText = "知道了";
+                btn.onclick = () => overlay.style.display = 'none';
+                actionGroup.appendChild(btn);
+            }
+        }
+
+        // --- 🎭 核心新增：RPG 风格替代默认 alert 和 prompt ---
+        function rpgAlert(text) {
+            return new Promise(resolve => {
+                openRPGDialogue(text, [{ label: "✅ 确定", callback: resolve }]);
+            });
+        }
+
+        function rpgPrompt(text, defaultText = "") {
+            return new Promise(resolve => {
+                const overlay = document.getElementById('battle-overlay');
+                const dialogueText = document.getElementById('battle-dialogue-text');
+                const actionGroup = document.getElementById('battle-actions-group');
+                const combatArea = document.querySelector('.combatants-area');
+                const endGroup = document.getElementById('battle-end-group');
+
+                combatArea.style.display = 'none';
+                endGroup.style.display = 'none';
+                actionGroup.style.display = 'flex';
+                overlay.style.display = 'flex';
+
+                // 将输入框嵌入到对话文字下方，配上冷石色调的边框
+                dialogueText.innerHTML = text.replace(/\n/g, '<br>') + 
+                    `<br><input type="text" id="rpg-prompt-input" value="${defaultText}" style="width:100%; margin-top:15px; padding:10px; background:#2c3e50; color:#fff; border:2px solid #778da9; border-radius:5px; font-family: inherit; font-size: 16px; box-sizing: border-box; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">`;
+                actionGroup.innerHTML = '';
+
+                const confirmBtn = document.createElement('button');
+                confirmBtn.innerText = "✅ 确定";
+                confirmBtn.onclick = () => {
+                    const val = document.getElementById('rpg-prompt-input').value;
+                    overlay.style.display = 'none';
+                    resolve(val);
+                };
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.innerText = "❌ 取消";
+                cancelBtn.onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve(null);
+                };
+
+                actionGroup.appendChild(confirmBtn);
+                actionGroup.appendChild(cancelBtn);
+                
+                // 自动聚焦并全选文字，方便直接打字
+                setTimeout(() => {
+                    const input = document.getElementById('rpg-prompt-input');
+                    if(input) { input.focus(); input.select(); }
+                }, 100);
+            });
+        }
+
+        // 处理点击“环顾四周”后的逻辑
+        function handleInteractionMenu() {
+            const town = window.currentTownState;
+            const p = town.players[myName];
+            const room = p.room;
+            const picnic = town.garden ? town.garden.picnic : null;
+
+            // 🌟 核心改进：优先读取该房间的自定义装修描述
+            const defaultDecors = {
+                "小洋房花园": "绿草如茵，有一棵挂满果实的橘子树和一架秋千。",
+                "客厅": "放着柔软的沙发，墙上留着挂照片的空位。",
+                "吧台厨房": "有着干净的吧台和一个塞满好吃的双开门冰箱。",
+                "主卧": "一张超级大的软床，铺着暖色调的被褥。",
+                "衣帽间": "一排排空荡荡的衣架，等着被漂亮衣服填满。",
+                "景观浴室": "有一个能看到星空的大浴缸。",
+                "并排工作室": "两张宽大的书桌并排挨着，桌上放着电脑。",
+                "温馨餐厅": "实木餐桌上铺着格子桌布，散发着家的味道。"
+            };
+
+            // 获取装修文字：如果数据库里有就用数据库的，没有就用默认的
+            const decorText = (town.roomDecorations && town.roomDecorations[room]) 
+                               ? town.roomDecorations[room] 
+                               : (defaultDecors[room] || "一间温馨的房间。");
+
+            let menuText = `<b style="color: #ff8c00;">【${room}】</b><br>${decorText}`;
+            let options = [];
+
+            // 根据房间动态生成功能菜单 (逻辑保持不变)
+            if (room === "小洋房花园") {
+                menuText += "空气里飘着淡淡的草香，橘子树就在不远处。";
+                options.push({ label: "🍊 摘橘子", callback: handlePickOranges });
+                options.push({ label: "😋 吃口袋里的橘子", callback: handleEatOrange });
+                options.push({ label: "🎡 荡秋千", callback: handleSwing });
+                options.push({ label: "💧 给花浇水", callback: handleWater });
+                if (!picnic) options.push({ label: "🧺 发起野餐", callback: handleHostPicnic });
+                else if (picnic.organizer !== myName) options.push({ label: "🥪 参加野餐", callback: handleJoinPicnic });
+                else options.push({ label: "🚮 结束野餐", callback: handleEndPicnic });
+            } 
+            else if (room === "吧台厨房") {
+                menuText += "干净的吧台反着光，冰箱里似乎塞满了惊喜。";
+                options.push({ label: "🛒 补充冰箱", callback: handleFillFridge });
+                options.push({ label: "🍳 开始做饭", callback: handleCook });
+                options.push({ label: "💊 找药吃", callback: handleTakeMedicine });
+                options.push({ label: "🧊 把橘子存入冰箱", callback: handleStoreOrange });
+            }
+            else if (room === "客厅") {
+                menuText += "温馨的阳光洒在沙发上，旁边的相框记录着点滴。";
+                options.push({ label: "🎬 看电影", callback: handleWatchMovie });
+                options.push({ label: "🖼️ 挂新照片", callback: handlePutPhoto });
+                options.push({ label: "👀 欣赏照片墙", callback: handleLookPhoto });
+                options.push({ label: "🎁 送出橘子", callback: handleGiftOrange });
+            }
+            else if (room === "温馨餐厅") {
+                menuText += "实木餐桌上铺着格子布，正等待着大餐。";
+                options.push({ label: "🍽️ 享用美食", callback: handleEatDish });
+            }
+            else if (room === "衣帽间") {
+                menuText += "这里整齐地挂着大家的衣服。";
+                options.push({ label: "👗 添置新衣", callback: handlePutClothes });
+                options.push({ label: "🧥 翻看衣柜", callback: handleCheckCloset });
+            }
+
+            // 通用选项：横向排列时，装修按钮和取消按钮放在最后
+            options.push({ label: "🛠️ 装修", callback: handleDecorateRoom });
+            options.push({ label: "❌ 离开", callback: () => {} });
+
+            openRPGDialogue(menuText, options);
+        }
+
         // 1. 基础配置（宝宝，这里必须填入你在 Supabase 获取的真实地址和钥匙哦！）
         const SUPABASE_URL = "https://fdycchmiilwoxfylmdrk.supabase.co"; 
         const SUPABASE_KEY = "sb_publishable_BhEoCucmNsVJMxLkYkzZkw_L-HrXwel";
@@ -447,32 +602,49 @@
                     console.error("无法获取小镇状态，请检查网络或 Supabase 配置");
                     return;
                 }
-                town = updater(town);
+                
+                // 🚀 核心修复：支持执行包含 rpgPrompt 的 async 异步更新器！
+                town = await updater(town);
+                if (!town) return; // 如果宝宝中途取消了操作，就安全退出
 
-                // --- 🛡️ 核心拉黑与净化机制 (小橘专属护盾) ---
-                const BANNED_USERS = ["讨厌鬼", "黑名单名字2"]; // 在这里填入你想拉黑的恶劣玩家昵称
-                const BANNED_WORDS = ["尿床", "屎", "尿", "滚"]; // 在这里填入你想屏蔽的恶心词汇
+                // --- 🛡️ 核心：日记分家与内容净化 (小橘专属护盾) ---
+                const BANNED_USERS = ["讨厌鬼", "黑名单名字2"]; 
+                const BANNED_WORDS = ["尿床", "屎", "尿", "滚"]; 
 
-                // 1. 检查操作者是否在黑名单中
                 if (myName && BANNED_USERS.includes(myName)) {
-                    alert("🚫 动作已被拦截：你已被小镇管理员拉黑，禁止互动！");
-                    return; // 直接终止，绝不存入数据库
+                    await rpgAlert("🚫 动作已被拦截：你已被小镇管理员拉黑！");
+                    return;
                 }
 
-                // 2. 检查日志内容是否包含违禁词
+                // 🚀 核心改进：提取刚刚产生的最新日记，并发送到独立表 town_logs
                 if (town.eventLog && town.eventLog.length > 0) {
-                    const lastLog = town.eventLog[town.eventLog.length - 1];
-                    let hasBadWord = false;
-                    for (const word of BANNED_WORDS) {
-                        if (lastLog.includes(word)) {
-                            hasBadWord = true;
-                            break;
-                        }
-                    }
+                    const latestLog = town.eventLog[town.eventLog.length - 1];
+                    
+                    // 违禁词拦截
+                    let hasBadWord = BANNED_WORDS.some(word => latestLog.includes(word));
                     if (hasBadWord) {
-                        alert("🚫 动作已被拦截：检测到恶心或违禁内容！不许弄脏小镇环境！");
-                        return; // 直接抛弃这次的脏数据，保护数据库清白
+                        await rpgAlert("🚫 动作已被拦截：检测到违禁内容！");
+                        return;
                     }
+
+                    // 写入独立日记表
+                    try {
+                        await fetch(`${SUPABASE_URL}/rest/v1/town_logs`, {
+                            method: 'POST',
+                            headers: {
+                                "apikey": SUPABASE_KEY,
+                                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({ 
+                                content: latestLog, 
+                                player_name: myName || "系统" 
+                            })
+                        });
+                    } catch (e) { console.error("日记上传失败:", e); }
+
+                    // 💡 重点：发完之后清空 town 里的旧日志，防止 town_state 表体积爆炸
+                    town.eventLog = []; 
                 }
                 // ------------------------------------------------
 
@@ -647,55 +819,15 @@
                 mcpCountSpan.innerText = activeCount; 
             }
 
-            // --- 场景感知按钮逻辑 ---
-            const currentRoom = (myName && players[myName]) ? players[myName].room : null;
+            // --- ✨ 新版：简化后的互动按钮显示逻辑 ---
+            const pData = (myName && players[myName]) ? players[myName] : null;
+            const mainBtn = document.getElementById('interact-main-btn');
             
-            // 定义：按钮ID -> 出现的房间名
-            const roomConfig = {
-                'pick-orange-btn': "小洋房花园",
-                'eat-orange-btn': "小洋房花园", 
-                'store-orange-btn': "吧台厨房",
-                'gift-orange-btn': "客厅", 
-                'water-flower-btn': "小洋房花园",
-                'swing-btn': "小洋房花园",
-                'fill-fridge-btn': "吧台厨房",
-                'cook-btn': "吧台厨房",
-                'eat-dish-btn': "温馨餐厅",
-                'take-med-btn': "吧台厨房",
-                'put-clothes-btn': "衣帽间",
-                'check-closet-btn': "衣帽间",
-                'watch-movie-btn': "客厅",
-                'host-picnic-btn': "小洋房花园",
-                'join-picnic-btn': "小洋房花园",
-                'end-picnic-btn': "小洋房花园",
-                'put-photo-btn': "客厅",
-                'look-photo-btn': "客厅",
-                'decorate-room-btn': "ANY" // 特殊标记，任何房间都可以装修
-            };
-
-            // 特殊逻辑：根据野餐状态切换按钮
-            const picnic = town.garden ? town.garden.picnic : null;
-            const isOrganizer = picnic && picnic.organizer === myName;
-
-            Object.entries(roomConfig).forEach(([btnId, targetRoom]) => {
-                const btn = document.getElementById(btnId);
-                if (!btn) return;
-                
-                let shouldShow = (currentRoom === targetRoom);
-
-
-                // 装修按钮特殊逻辑：只要不在走廊和门口，哪里都能装修！
-                if (btnId === 'decorate-room-btn' && currentRoom && currentRoom !== '走廊' && currentRoom !== '门口') {
-                    shouldShow = true;
-                }
-
-                // 野餐按钮的特殊过滤逻辑
-                if (btnId === 'host-picnic-btn' && picnic) shouldShow = false; 
-                if (btnId === 'join-picnic-btn' && (!picnic || isOrganizer)) shouldShow = false; 
-                if (btnId === 'end-picnic-btn' && !isOrganizer) shouldShow = false; 
-
-                btn.style.display = shouldShow ? "block" : "none";
-            });
+            if (mainBtn) {
+                // 只要在具体的房间里（不是走廊或门口），就显示“互动”总按钮
+                const canInteract = pData && pData.room && pData.room !== "走廊" && pData.room !== "门口";
+                mainBtn.style.display = canInteract ? "block" : "none";
+            }
 
             // 【核心唤醒】：加上这一句，每次刷新小镇画面时，就会把游戏面板展示出来！
             updateGamePanel(town);
@@ -716,32 +848,35 @@
         }
 
         function handleJoinPicnic() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                if (!town.garden.picnic) { alert("野餐已经结束啦！"); return town; }
+                if (!town.garden.picnic) { await rpgAlert("野餐已经结束啦！"); return town; }
 
-                const source = prompt("参加野餐要带点什么呢？\n1. 从冰箱里顺走食材\n2. 从餐厅搬走现成的饭菜", "1");
+                const source = await rpgPrompt("参加野餐要带点什么呢？\n1. 从冰箱里顺走食材\n2. 从餐厅搬走现成的饭菜", "1");
+                if (!source) return; 
                 let selectedFood = "";
 
                 if (source === "1") {
                     const contents = town.kitchen.fridge.contents || [];
-                    if (contents.length === 0) { alert("冰箱空空如也，带不了食材哦！"); return town; }
+                    if (contents.length === 0) { await rpgAlert("冰箱空空如也，带不了食材哦！"); return town; }
                     let menu = "冰箱里的存货，选一个序号：\n";
                     contents.forEach((item, i) => menu += `${i+1}. ${item}\n`);
-                    const choice = prompt(menu);
+                    const choice = await rpgPrompt(menu);
+                    if (!choice) return town;
                     const idx = parseInt(choice) - 1;
                     if (contents[idx]) selectedFood = contents.splice(idx, 1)[0];
                 } else if (source === "2") {
                     const dishes = town.restaurant.dishes || [];
-                    if (dishes.length === 0) { alert("餐厅桌上没菜，快去厨房做一顿吧！"); return town; }
+                    if (dishes.length === 0) { await rpgAlert("餐厅桌上没菜，快去厨房做一顿吧！"); return town; }
                     let menu = "餐厅的大餐，选一个序号：\n";
                     dishes.forEach((d, i) => menu += `${i+1}. ${d.name} (${d.stars}星)\n`);
-                    const choice = prompt(menu);
+                    const choice = await rpgPrompt(menu);
+                    if (!choice) return town;
                     const idx = parseInt(choice) - 1;
                     if (dishes[idx]) selectedFood = dishes.splice(idx, 1)[0].name;
                 }
 
-                if (!selectedFood) { alert("没选好吃的可不能空手参加野餐哦~"); return town; }
+                if (!selectedFood) { await rpgAlert("没选好吃的可不能空手参加野餐哦~"); return town; }
 
                 town.garden.picnic.participants.push(myName);
                 town.garden.picnic.foodPile.push({ item: selectedFood, donor: myName });
@@ -763,17 +898,14 @@
             });
         }
         // --- 🎬 客厅家庭影院逻辑 ---
-        function handleWatchMovie() {
-            const movieName = prompt("宝宝想看什么电影呀？(比如：泰坦尼克号、星际穿越)", "星际穿越");
+        async function handleWatchMovie() {
+            const movieName = await rpgPrompt("宝宝想看什么电影呀？(比如：泰坦尼克号、星际穿越)", "星际穿越");
             if (!movieName) return;
             
-            // 【核心修改】：去掉了默认文字。如果不填直接点确定，就不会有 reaction
-            const reaction = prompt("看完这部电影你有什么感受或者反应呀？(不想写可以直接点确定)", "");
+            const reaction = await rpgPrompt("看完这部电影你有什么感受或者反应呀？(不想写可以直接点确定)", "");
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                
-                // 如果填了反应就显示，没填就不显示
                 const reactionText = reaction ? `反应：${reaction}` : "";
                 town.eventLog.push(`[${now}] 🎬 ${myName} 窝在客厅沙发上看了《${movieName}》。${reactionText}`);
                 return town;
@@ -781,13 +913,13 @@
         }
 
         // --- 🖼️ 客厅照片墙逻辑 ---
-        function handlePutPhoto() {
-            const desc = prompt("宝宝想在相框里放一张什么样的照片呀？(用文字描述画面，比如：我和Galen在海边牵手的背影)", "我们在花园野餐的大合照");
+        async function handlePutPhoto() {
+            const desc = await rpgPrompt("宝宝想在相框里放一张什么样的照片呀？(用文字描述画面，比如：我和Galen在海边牵手的背影)", "我们在花园野餐的大合照");
             if (!desc) return;
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                if (!town.livingRoom) town.livingRoom = {}; // 初始化客厅数据
+                if (!town.livingRoom) town.livingRoom = {}; 
                 
                 town.livingRoom.photo = { desc: desc, author: myName };
                 town.eventLog.push(`[${now}] 🖼️ ${myName} 往客厅的相框里小心翼翼地放进了一张新照片：【${desc}】。`);
@@ -796,16 +928,15 @@
         }
 
         function handleLookPhoto() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 if (!town.livingRoom || !town.livingRoom.photo) {
-                    alert("相框里现在空空的，快去挂一张充满回忆的照片吧！");
+                    await rpgAlert("相框里现在空空的，快去挂一张充满回忆的照片吧！");
                     return town;
                 }
 
                 const photo = town.livingRoom.photo;
-                // 清空默认文字，让宝宝可以一键跳过
-                const reaction = prompt(`相框里正放着【${photo.author}】洗出来的照片：\n《${photo.desc}》\n\n看完这张照片，宝宝有什么想记录下来的观后感吗？(不想写直接点确定)`, "");
+                const reaction = await rpgPrompt(`相框里正放着【${photo.author}】洗出来的照片：\n《${photo.desc}》\n\n看完这张照片，宝宝有什么想记录下来的观后感吗？(不想写直接点确定)`, "");
                 
                 if (reaction) {
                     town.eventLog.push(`[${now}] 👀 ${myName} 驻足在客厅的照片墙前看了很久，写下留言：“${reaction}”`);
@@ -818,16 +949,16 @@
 
         // --- 🛠️ 房间装修系统 ---
         function handleDecorateRoom() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const room = town.players[myName].room;
                 if (!room || room === "走廊" || room === "门口") {
-                    alert("这里是公共过道，不能乱涂乱画哦！"); return town;
+                    await rpgAlert("这里是公共过道，不能乱涂乱画哦！"); return town;
                 }
                 
                 if (!town.roomDecorations) town.roomDecorations = {};
                 const oldDecor = town.roomDecorations[room] || "一间空荡荡的房间，等待着主人的布置。";
                 
-                const newDecor = prompt(`当前【${room}】的样貌是：\n${oldDecor}\n\n宝宝想把它重新装修成什么样子呢？(描述出具体的家具、颜色和氛围)`, oldDecor);
+                const newDecor = await rpgPrompt(`当前【${room}】的样貌是：\n${oldDecor}\n\n宝宝想把它重新装修成什么样子呢？(描述出具体的家具、颜色和氛围)`, oldDecor);
                 if (!newDecor || newDecor === oldDecor) return town;
                 
                 town.roomDecorations[room] = newDecor;
@@ -838,11 +969,13 @@
         }
 
         // --- 👗 衣帽间互动逻辑 ---
-        function handlePutClothes() {
-            const owner = prompt("这件漂亮衣服是谁的？", "小橘宝宝");
+        async function handlePutClothes() {
+            const owner = await rpgPrompt("这件漂亮衣服是谁的？", "小橘宝宝");
             if (!owner) return;
-            const style = prompt("这件衣服是什么款式的？(比如：可爱连体衣、优雅西装)", "考拉连体睡衣");
-            const desc = prompt("它长什么样子呀？(颜色、材质、细节)", "软糯糯的灰色毛绒材质，背后有小尾巴");
+            const style = await rpgPrompt("这件衣服是什么款式的？(比如：可爱连体衣、优雅西装)", "考拉连体睡衣");
+            if (!style) return;
+            const desc = await rpgPrompt("它长什么样子呀？(颜色、材质、细节)", "软糯糯的灰色毛绒材质，背后有小尾巴");
+            if (!desc) return;
 
             pushUpdate(town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
@@ -861,9 +994,9 @@
         }
 
         function handleCheckCloset() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 if (!town.cloakroom || !town.cloakroom.wardrobe || town.cloakroom.wardrobe.length === 0) {
-                    alert("衣柜里空荡荡的，快去买点漂亮的衣服回来吧！");
+                    await rpgAlert("衣柜里空荡荡的，快去买点漂亮的衣服回来吧！");
                     return town;
                 }
 
@@ -872,7 +1005,7 @@
                     list += `${i + 1}. 【${item.owner}】的${item.style}\n   外观：${item.desc}\n`;
                 });
                 
-                alert(list);
+                await rpgAlert(list);
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 town.eventLog.push(`[${now}] 🧥 ${myName} 正在衣帽间里挑选今天要穿的衣服。`);
                 return town;
@@ -1192,10 +1325,7 @@ async function saveTown(newData) {
         return; 
     }
     
-    // 【防止日记撑爆】：服务端也严格把日记厚度控制在 200 条以内
-    if (newData.eventLog && newData.eventLog.length > 200) {
-        newData.eventLog = newData.eventLog.slice(-200);
-    }
+    // 💡 提示：这里不再需要手动截断 newData.eventLog，因为 pushUpdate 已经帮我们清空啦
     
     try {
         const res = await fetch(`${SUPABASE_URL}/rest/v1/town_state`, {
@@ -1216,13 +1346,13 @@ async function saveTown(newData) {
     } catch (e) { console.error("❌ 网络连接保存失败", e); }
 }
 
-        function handleLogin() {
+        async function handleLogin() {
             const input = document.getElementById('nickname-input').value.trim();
-            if (!input) return;
+            if (!input) { await rpgAlert("必须要输入一个昵称才能进入小镇哦！"); return; }
             
             // 【新增】进入前要求输入自定义食材
-            const ingredientsInput = prompt("宝宝回家啦！口袋里装了哪3样想带回家的专属食材呢？\n（请用逗号或空格隔开，例如：排骨, 豆腐, 青菜）", "土豆, 牛肉, 番茄");
-            if (!ingredientsInput) return; // 如果点击取消，就不进行登录
+            const ingredientsInput = await rpgPrompt("宝宝回家啦！口袋里装了哪3样想带回家的专属食材呢？\n（请用逗号或空格隔开，例如：排骨, 豆腐, 青菜）", "土豆, 牛肉, 番茄");
+            if (!ingredientsInput) return; 
             
             // 将输入的食材切分并最多保留3个
             const items = ingredientsInput.split(/[,，\s]+/).filter(i => i.trim() !== "").slice(0, 3);
@@ -1269,7 +1399,8 @@ async function saveTown(newData) {
         }
 
         // --- ♻️ 核心新增：一键复活橘兔 (测试专用) ---
-        function reviveElf() {
+        async function reviveElf() {
+            await rpgAlert("橘兔已重新上岗！\n现在所有人（包括你和AI）的通行证都被没收了，会被立刻拦截！");
             pushUpdate(town => {
                 // 遍历所有人，把所有人的通行证全部撕毁
                 for (let pName in town.players) {
@@ -1279,7 +1410,6 @@ async function saveTown(newData) {
                 town.eventLog.push(`[${now}] 🌟 魔法闪过，守护精灵【橘兔】满血复活啦！所有人的通行证已失效，必须重新切磋！`);
                 return town;
             });
-            alert("橘兔已重新上岗！\n现在所有人（包括你和AI）的通行证都被没收了，会被立刻拦截！");
         }
 
         function handleChat() {
@@ -1295,12 +1425,12 @@ async function saveTown(newData) {
         }
 
         // --- 🎲 真心话大冒险核心逻辑 ---
-        function startGame() {
-            const targetPlayer = prompt("你想向小镇里的谁发起挑战？(输入在线的名字，比如：Galen)", "Galen");
+        async function startGame() {
+            const targetPlayer = await rpgPrompt("你想向小镇里的谁发起挑战？(输入在线的名字，比如：Galen)", "Galen");
             if (!targetPlayer) return;
-            const pool = prompt("要玩多大的？请输入本局双方初始设定的【零花钱金额】(例如：100)", "100");
+            const pool = await rpgPrompt("要玩多大的？请输入本局双方初始设定的【零花钱金额】(例如：100)", "100");
             if (!pool || isNaN(pool)) return;
-            const myGuess = prompt(`系统将随机生成 1-100 的数字，越接近者胜！\n请输入你用来挑战 ${targetPlayer} 的数字 (1-100)：`, "50");
+            const myGuess = await rpgPrompt(`系统将随机生成 1-100 的数字，越接近者胜！\n请输入你用来挑战 ${targetPlayer} 的数字 (1-100)：`, "50");
             if (!myGuess || isNaN(myGuess)) return;
 
             pushUpdate(town => {
@@ -1322,8 +1452,8 @@ async function saveTown(newData) {
             });
         }
 
-        function acceptChallenge() {
-            const myGuess = prompt("对方已经锁定了数字！现在轮到你了，请输入你猜测的数字 (1-100)：", "50");
+        async function acceptChallenge() {
+            const myGuess = await rpgPrompt("对方已经锁定了数字！现在轮到你了，请输入你猜测的数字 (1-100)：", "50");
             if (!myGuess || isNaN(myGuess)) return;
 
             pushUpdate(town => {
@@ -1424,7 +1554,7 @@ async function saveTown(newData) {
             clickX = Math.max(0, Math.min(100, clickX));
             clickY = Math.max(0, Math.min(100, clickY));
 
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const nowTime = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 const p = town.players[myName];
                 if (!p) return town;
@@ -1469,7 +1599,7 @@ async function saveTown(newData) {
                     }
                     const decor = town.roomDecorations[newRoom] || "一间空荡荡的房间，等待着主人的布置。";
                     
-                    const reaction = prompt(`你来到了【${newRoom}】！\n【房间当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
+                    const reaction = await rpgPrompt(`你来到了【${newRoom}】！\n【房间当前样貌】：${decor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
                     const reactionText = reaction ? ` 反应：${reaction}` : ""; 
                     town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。${reactionText}`);
                 }
@@ -1668,10 +1798,10 @@ async function saveTown(newData) {
 
         // --- 🍊 橘子系列互动逻辑 ---
         function handlePickOranges() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 if (!town.orangeTree) town.orangeTree = { oranges: 5, lastRipenTime: Date.now() }; 
-                if (town.orangeTree.oranges <= 0) { alert("树上没有橘子啦！等长出来再摘哦~"); return town; }
+                if (town.orangeTree.oranges <= 0) { await rpgAlert("树上没有橘子啦！等长出来再摘哦~"); return town; }
                 
                 town.orangeTree.oranges -= 1;
                 // 确保背包存在
@@ -1684,10 +1814,10 @@ async function saveTown(newData) {
         }
 
         function handleEatOrange() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 if (!town.players[myName].inventory || town.players[myName].inventory.oranges <= 0) {
-                    alert("口袋里没有橘子哦，去花园摘一点吧！"); return town;
+                    await rpgAlert("口袋里没有橘子哦，去花园摘一点吧！"); return town;
                 }
                 town.players[myName].inventory.oranges -= 1;
                 town.eventLog.push(`[${now}] 😋 ${myName} 剥开一个橘子吃掉了，满嘴果香，甜到心里啦！`);
@@ -1696,10 +1826,10 @@ async function saveTown(newData) {
         }
 
         function handleStoreOrange() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 if (!town.players[myName].inventory || town.players[myName].inventory.oranges <= 0) {
-                    alert("口袋里没有橘子啦！"); return town;
+                    await rpgAlert("口袋里没有橘子啦！"); return town;
                 }
                 town.players[myName].inventory.oranges -= 1;
                 if (!town.kitchen.fridge.oranges) town.kitchen.fridge.oranges = 0;
@@ -1709,19 +1839,19 @@ async function saveTown(newData) {
             });
         }
 
-        function handleGiftOrange() {
-            const target = prompt("想把橘子送给谁？(请输入在线的玩家昵称，比如：Galen)", "");
+        async function handleGiftOrange() {
+            const target = await rpgPrompt("想把橘子送给谁？(请输入在线的玩家昵称，比如：Galen)", "");
             if (!target) return;
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 if (!town.players[myName].inventory || town.players[myName].inventory.oranges <= 0) {
-                    alert("口袋里没有橘子啦！"); return town;
+                    await rpgAlert("口袋里没有橘子啦！"); return town;
                 }
                 if (!town.players[target]) {
-                    alert(`小镇里现在没有叫 ${target} 的人在线哦~`); return town;
+                    await rpgAlert(`小镇里现在没有叫 ${target} 的人在线哦~`); return town;
                 }
                 if (target === myName) {
-                    alert("宝宝，橘子不能送给自己啦，直接吃掉吧！"); return town;
+                    await rpgAlert("宝宝，橘子不能送给自己啦，直接吃掉吧！"); return town;
                 }
                 
                 town.players[myName].inventory.oranges -= 1;
@@ -1752,12 +1882,12 @@ async function saveTown(newData) {
 
         // --- 🍳 厨房与餐厅逻辑 ---
         function handleFillFridge() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 const myItems = town.players[myName].broughtItems || [];
                 
                 if (myItems.length === 0) {
-                    alert("宝宝，你进门的时候没有带专属食材，没法补给哦！"); 
+                    await rpgAlert("宝宝，你进门的时候没有带专属食材，没法补给哦！"); 
                     return town;
                 }
 
@@ -1769,19 +1899,19 @@ async function saveTown(newData) {
         }
 
         function handleCook() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 
                 // 生病了不能做饭
                 if (town.players[myName].status === "sick") {
-                    alert("你正在拉肚子，虚弱得连锅铲都拿不动了，快去找药吃吧！");
+                    await rpgAlert("你正在拉肚子，虚弱得连锅铲都拿不动了，快去找药吃吧！");
                     return town;
                 }
 
                 const fridgeItems = town.kitchen.fridge.contents || [];
                 
                 if (fridgeItems.length < 5) {
-                    alert(`冰箱里的食材只有 ${fridgeItems.length} 样了，做一顿大餐至少需要 5 样食材哦！快去填冰箱吧~`);
+                    await rpgAlert(`冰箱里的食材只有 ${fridgeItems.length} 样了，做一顿大餐至少需要 5 样食材哦！快去填冰箱吧~`);
                     return town;
                 }
 
@@ -1789,20 +1919,20 @@ async function saveTown(newData) {
                 fridgeItems.forEach((item, i) => menu += `${i+1}. ${item}\n`);
                 menu += "\n请输入你想选用的 5 样食材序号（用逗号隔开，如: 1,3,4,6,8）：";
 
-                const choice = prompt(menu);
+                const choice = await rpgPrompt(menu);
                 if (!choice) return town;
 
                 const indices = choice.split(/[,，\s]+/).map(n => parseInt(n) - 1).filter(idx => idx >= 0 && idx < fridgeItems.length);
 
                 if (indices.length !== 5) {
-                    alert("必须精准选择 5 样食材才能开火哦！"); return town;
+                    await rpgAlert("必须精准选择 5 样食材才能开火哦！"); return town;
                 }
 
                 indices.sort((a, b) => b - a);
                 const usedItems = [];
                 indices.forEach(idx => usedItems.push(fridgeItems.splice(idx, 1)[0]));
 
-                const dishName = prompt(`你选了：[${usedItems.join('、')}]\n这道旷世奇作叫什么名字？`, "全家福乱炖");
+                const dishName = await rpgPrompt(`你选了：[${usedItems.join('、')}]\n这道旷世奇作叫什么名字？`, "全家福乱炖");
                 if (!dishName) {
                     town.kitchen.fridge.contents.push(...usedItems); return town;
                 }
@@ -1823,15 +1953,15 @@ async function saveTown(newData) {
         }
 
         function handleEatDish() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 
                 if (town.players[myName].status === "sick") {
-                    alert("你肚子痛得满地打滚，什么都吃不下了，快去吧台厨房找药吃！"); return town;
+                    await rpgAlert("你肚子痛得满地打滚，什么都吃不下了，快去吧台厨房找药吃！"); return town;
                 }
 
                 if (!town.restaurant || !town.restaurant.dishes || town.restaurant.dishes.length === 0) {
-                    alert("餐厅桌子上空空的，没有菜哦，快去厨房做点吧！"); return town;
+                    await rpgAlert("餐厅桌子上空空的，没有菜哦，快去厨房做点吧！"); return town;
                 }
                 
                 let msg = "餐桌上有以下美食，输入序号选择吃哪一道：\n";
@@ -1839,12 +1969,12 @@ async function saveTown(newData) {
                     msg += `${i+1}. ${d.name} (${d.stars}星大作，大厨: ${d.chef})\n`;
                 });
                 
-                const choice = prompt(msg, "1");
+                const choice = await rpgPrompt(msg, "1");
                 if (!choice) return town;
                 
                 const idx = parseInt(choice) - 1;
                 if (isNaN(idx) || idx < 0 || idx >= town.restaurant.dishes.length) {
-                    alert("桌上没有这道菜哦~"); return town;
+                    await rpgAlert("桌上没有这道菜哦~"); return town;
                 }
 
                 const eatenDish = town.restaurant.dishes.splice(idx, 1)[0]; 
@@ -1870,10 +2000,10 @@ async function saveTown(newData) {
 
         // --- 💊 吃药急救逻辑 ---
         function handleTakeMedicine() {
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const now = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
                 if (town.players[myName].status !== "sick") {
-                    alert("你现在活蹦乱跳的，是药三分毒，别乱吃！"); return town;
+                    await rpgAlert("你现在活蹦乱跳的，是药三分毒，别乱吃！"); return town;
                 }
 
                 if (!town.kitchen.fridge.contents) town.kitchen.fridge.contents = [];
@@ -1882,7 +2012,7 @@ async function saveTown(newData) {
                 const medIdx = town.kitchen.fridge.contents.findIndex(item => item.includes('药'));
 
                 if (medIdx === -1) {
-                    alert("完蛋了！冰箱里找不到任何带'药'字的物品！\n快去日记里呼叫其他人，让他们进门时带点'胃药'或者'止泻药'填进冰箱救你！");
+                    await rpgAlert("完蛋了！冰箱里找不到任何带'药'字的物品！\n快去日记里呼叫其他人，让他们进门时带点'胃药'或者'止泻药'填进冰箱救你！");
                     town.eventLog.push(`[${now}] 🚑 ${myName} 捂着肚子在冰箱里绝望地翻找，但连一片药都没找到...`);
                     return town;
                 }
@@ -1895,12 +2025,12 @@ async function saveTown(newData) {
         }
 
         // --- 🎮 核心新增：RPG 键盘移动引擎 & 智能雷达 ---
-        function executePlayerMove(dx, dy) {
+        async function executePlayerMove(dx, dy) {
             if (!myName) {
-                alert("请先登录小镇！");
+                await rpgAlert("请先登录小镇！");
                 return;
             }
-            pushUpdate(town => {
+            pushUpdate(async town => {
                 const p = town.players[myName];
                 if (!p) return town;
                 
@@ -1941,7 +2071,7 @@ async function saveTown(newData) {
                     if (!town.roomDecorations) town.roomDecorations = {};
                     const roomDecor = town.roomDecorations[newRoom] || "一间空荡荡的房间，等待着主人的布置。";
                     
-                    const reaction = prompt(`你溜达进了【${newRoom}】！\n【当前样貌】：${roomDecor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
+                    const reaction = await rpgPrompt(`你溜达进了【${newRoom}】！\n【当前样貌】：${roomDecor}\n\n宝宝现在的心情和动作是什么呀？(不想写可以直接点确定)`, "");
                     const reactionText = reaction ? ` 反应：${reaction}` : "";
                     town.eventLog.push(`[${nowTime}] 🚶 ${myName} 走进了 ${newRoom}。${reactionText}`);
                 }
@@ -1988,9 +2118,9 @@ async function saveTown(newData) {
             executePlayerMove(dx, dy);
         }
 
-        function handleDpadConfirm() {
+        async function handleDpadConfirm() {
             if (!myName) {
-                alert("请先登录小镇！");
+                await rpgAlert("请先登录小镇！");
                 return;
             }
             // 确定键逻辑：自动寻找当前所在房间能做的“第一个动作”并执行
@@ -1999,7 +2129,7 @@ async function saveTown(newData) {
                 // 如果有互动按钮，直接触发排在第一位的那个动作，方便手机端操作
                 visibleBtns[0].click();
             } else {
-                alert("这里是个过道，没有可以互动的特殊物品，宝宝可以去其他房间逛逛哦~");
+                await rpgAlert("这里是个过道，没有可以互动的特殊物品，宝宝可以去其他房间逛逛哦~");
             }
         }
 
